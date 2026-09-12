@@ -19,3 +19,24 @@ The implementation is deliberately thin:
 The agent answers only from retrieved policy. It cites the source document. It refuses questions that are not in the published files. Every document is watermarked `SYNTHETIC — DEMO ONLY`. There is no origination workflow, no real customer data, and no document-level access control.
 
 The design plan is in [`docs/credit-policy-agent-plan.md`](docs/credit-policy-agent-plan.md).
+
+## Runtime Sequence
+
+```mermaid
+sequenceDiagram
+  participant U as Microsoft Teams
+  participant BOT as Azure Bot Service
+  participant A as Azure AI Foundry
+  participant SEARCH as Azure AI Search
+
+  U->>BOT: 1:1 chat
+  BOT->>A: Activity
+  Note over BOT,A: Activity to Responses
+  A->>A: system instructions
+  A->>SEARCH: retrieve
+  SEARCH->>SEARCH: query plan
+  SEARCH->>SEARCH: hybrid search + rerank
+  SEARCH-->>A: extractive + citations
+  A->>A: grounded answer, refuse if empty
+  A-->>U: text + citations
+```
