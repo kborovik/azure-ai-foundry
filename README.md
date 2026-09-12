@@ -41,11 +41,19 @@ uv run talos deploy --help
 
 Required env (Bicep/`azd` outputs; flags override): `AZURE_SEARCH_ENDPOINT`, `AZURE_AI_PROJECT_ENDPOINT`, `AZURE_AI_PROJECT_RESOURCE_ID`, `AZURE_STORAGE_RESOURCE_ID`, `AZURE_AI_SERVICES_ENDPOINT`. Missing env exits `2`.
 
-After `azd up`:
+Provision Storage, Azure AI Search (Basic), and a Foundry project with `gpt-5-mini` + `text-embedding-3-large` via `azd` (`azure.yaml` module `main`, not `main.bicep`). Knowledge sources stay out of Bicep — `talos deploy` creates them later.
 
 ```bash
 az login
 azd auth login
+azd env new credit-policy-demo
+azd env set AZURE_LOCATION swedencentral   # required; not eastus2 / westus3 / westus2
+azd up                                     # infra + RBAC + model deployments
+```
+
+After `azd up`:
+
+```bash
 eval "$(azd env get-values)"          # bash; fish: talos will call `azd env get-values` itself
 uv run talos deploy --wait
 uv run pytest                         # unit
