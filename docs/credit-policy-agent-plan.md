@@ -105,91 +105,45 @@ This repository is empty. There is no existing agent, corpus, or infrastructure.
 
 ## Proposed Design
 
-### High-level architecture
-
-```mermaid
-flowchart LR
-  subgraph Authoring
-    GEN["scripts/generate_credit_policies.py<br/>uv PEP 723"]
-    LOCAL["data/credit-policies/*.md<br/>+ manifest.json"]
-  end
-
-  subgraph Azure
-    BLOB["Blob container<br/>credit-policies"]
-    KS["Knowledge source<br/>ks-credit-policies<br/>azureBlob"]
-    IDX["Auto-generated<br/>datasource / skillset / indexer / index"]
-    KB["Knowledge base<br/>kb-credit-policies<br/>extractiveData, effort=low"]
-    CONN["Project connection<br/>conn-kb-credit-policies<br/>RemoteTool + ProjectManagedIdentity"]
-    AGENT["Prompt agent<br/>credit-policy-agent<br/>MCPTool knowledge_base_retrieve"]
-    BOT["Azure Bot Service<br/>(auto-created on publish)"]
-  end
-
-  subgraph Clients
-    PLAY["Foundry playground / Responses API"]
-    TEAMS["Microsoft Teams 1:1"]
-    E2E["pytest layers 1–5"]
-  end
-
-  GEN --> LOCAL
-  GEN --> BLOB
-  BLOB --> KS --> IDX
-  KS --> KB
-  KB -->|MCP /mcp?api-version=2026-08-01-preview| CONN
-  CONN --> AGENT
-  AGENT --> PLAY
-  AGENT -->|Activity protocol + BotServiceRbac| BOT --> TEAMS
-  E2E --> LOCAL
-  E2E --> BLOB
-  E2E --> KB
-  E2E --> AGENT
-```
-
 ### Runtime sequence (Teams user question)
 
 ```mermaid
 sequenceDiagram
-  participant U as Teams user
-  participant ABS as Azure Bot Service
-  participant EP as Agent Activity endpoint
-  participant A as credit-policy-agent<br/>(Responses runtime)
-  participant MCP as KB MCP<br/>knowledge_base_retrieve
-  participant KB as kb-credit-policies
-  participant IDX as Search index<br/>(chunked policies)
+  participant U as Microsoft Teams
+  participant BOT as Azure Bot Service
+  participant A as Azure AI Foundry
+  participant SEARCH as Azure AI Search
 
-  U->>ABS: 1:1 chat message
-  ABS->>EP: Activity protocol
-  Note over EP,A: Platform bridges Activity → Responses
-  A->>A: Apply system instructions
-  A->>MCP: tool call (query text)
-  MCP->>KB: retrieve (messages, effort=low)
-  KB->>KB: LLM query plan (gpt-5-mini)
-  KB->>IDX: parallel hybrid subqueries + semantic rerank
-  IDX-->>KB: chunks + source refs
-  KB-->>MCP: extractive payload + citations
-  MCP-->>A: tool result
-  A->>A: Grounded answer, refuse if empty
-  A-->>U: Text + document citations
+  U->>BOT: 1:1 chat
+  BOT->>A: Activity
+  Note over BOT,A: Activity to Responses
+  A->>A: system instructions
+  A->>SEARCH: retrieve
+  SEARCH->>SEARCH: query plan
+  SEARCH->>SEARCH: hybrid search + rerank
+  SEARCH-->>A: extractive + citations
+  A->>A: grounded answer, refuse if empty
+  A-->>U: text + citations
 ```
 
 ### Data flow (generation → index)
 
 ```mermaid
 flowchart TD
-  FACTS["corpus/facts.yaml<br/>single source of unique numbers"]
-  TPL["corpus/templates/*.md.j2"]
-  GEN["generate_credit_policies.py"]
-  MD["data/credit-policies/*.md"]
-  MAN["data/credit-policies/manifest.json"]
-  BLOB["st*/credit-policies/*.md"]
-  IX["Indexer run<br/>chunk + embed text-embedding-3-large"]
-  SI["ks-credit-policies-index"]
+  FACTS["FactsYaml"]
+  TPL["PolicyTemplates"]
+  GEN["PolicyGeneratorScript"]
+  MD["PolicyMarkdown"]
+  MAN["ManifestJson"]
+  BLOB["Azure Blob Storage"]
+  SEARCH["Azure AI Search"]
 
   FACTS --> GEN
   TPL --> GEN
   GEN --> MD
   GEN --> MAN
   GEN -->|overwrite if hash differs| BLOB
-  BLOB --> IX --> SI
+  BLOB -->|chunk and embed| SEARCH
 ```
 
 ### Component responsibilities
