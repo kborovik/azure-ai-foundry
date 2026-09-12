@@ -15,7 +15,7 @@
 
 Relationship managers and credit officers need a fast, cited answer to questions like “what is max LTV on an investment property?” during a live deal conversation. Today that means paging through policy PDFs. This demo shows a **Foundry Agent Service prompt agent** grounded on a **Foundry IQ knowledge base** whose source of truth is a small, synthetic corpus of bank credit-policy documents stored in **Azure Blob Storage**, with the same files dual-written locally so a presenter can open them. End users chat with the agent in **Microsoft Teams 1:1**.
 
-The implementation is deliberately thin: a `uv` PEP 723 script generates the corpus; Bicep/`azd` provisions Storage, Azure AI Search (Basic), and a Microsoft Foundry project with chat + embedding deployments; a second script creates the blob knowledge source, knowledge base, project MCP connection, and agent; pytest layers 1–4 cover corpus → ingestion → retrieval → agent without requiring a Teams tenant. Teams is a Foundry Agent Service publish step, not a custom Microsoft 365 Agents SDK host.
+The implementation is deliberately thin: **Talos** is a Click CLI (`uv run talos`) that generates the corpus, deploys Foundry IQ objects, and runs tests — not a pile of PEP 723 scripts. Bicep/`azd` provisions Storage, Azure AI Search (Basic), and a Microsoft Foundry project with chat + embedding deployments. `uv run talos deploy` creates the blob knowledge source, knowledge base, project MCP connection, and agent. Pytest layers 1–4 cover corpus → ingestion → retrieval → agent without requiring a Teams tenant. GitHub Actions calls `uv run talos deploy --wait` then live pytest. Teams is a Foundry Agent Service publish step, not a custom Microsoft 365 Agents SDK host.
 
 ---
 
@@ -23,7 +23,7 @@ The implementation is deliberately thin: a `uv` PEP 723 script generates the cor
 
 ### Current state
 
-This repository is empty. There is no existing agent, corpus, or infrastructure. The product is a **demo**, not a production credit system: no origination workflow, no real customer data, no document-level ACLs.
+The operator/CI surface is the **Talos** Click package (`src/talos/`, `uv run talos`). Corpus files, Bicep, and live Azure tests are still to land. The product is a **demo**, not a production credit system: no origination workflow, no real customer data, no document-level ACLs.
 
 ### Pain points the demo is meant to show
 
@@ -69,6 +69,7 @@ Brands below follow Microsoft Learn as of 2026-09. ARM types, REST/SDK identifie
 4. Publish the agent to Microsoft Teams as a 1:1 chat for the presenter (**Just you** scope).
 5. Provide a golden-query catalog of **18** queries and a layered pytest e2e framework.
 6. Provision demo-scale Azure resources via `azd` + Bicep, keyless (Microsoft Entra ID / managed identity).
+7. Ship one global CLI (`talos`) that GitHub Actions uses to deploy code changes and run tests.
 
 ### Non-goals
 
@@ -93,19 +94,20 @@ Brands below follow Microsoft Learn as of 2026-09. ARM types, REST/SDK identifie
 | K5 | **Search REST `2026-08-01-preview`** for KS/KB create + retrieve | GA `2026-04-01` is extractive + `intents` only — no query planning, no `messages` input. Cross-document and ambiguous queries need low-effort query planning. Portal still uses preview. Call this out as preview risk. |
 | K6 | **Models: `gpt-5-mini` (chat + KB planning) + `text-embedding-3-large`** | **Decided 2026-09-12.** Embedding is what the private-retrieval tutorial and blob KS samples use. `gpt-5-mini` is GA, listed for KB query planning, and in the portal-supported LLM list. `gpt-4.1-mini` still appears in some connect samples but is **deprecated** for KB models. Do **not** switch to `gpt-5.4-mini` in v1. |
 | K7 | **KB `outputMode: extractiveData`, `retrievalReasoningEffort.kind: low`** | FAQ: for Foundry IQ + agents, return extractive data so the agent reasons; reserve answer synthesis for standalone retrieve-to-user apps. `low` enables query planning (up to 3 sources / 3 subqueries) without medium-effort latency. Tests that need determinism can override to `minimal` on the retrieve request. |
-| K8 | **Infra via `azd` + Bicep**; knowledge objects via Python, not Bicep | Storage/Search/Foundry/RBAC/deployments are ARM-native. Knowledge sources, knowledge bases, project connections, and agents are data-plane (Search REST + Foundry Agent Service `api-version=v1` + ARM connections). A post-provision script is the supported pattern (see Foundry IQ hosted-agent quickstart `provision_kb.py`). |
+| K8 | **Infra via `azd` + Bicep**; knowledge objects via `talos deploy`, not Bicep | Storage/Search/Foundry/RBAC/deployments are ARM-native. Knowledge sources, knowledge bases, project connections, and agents are data-plane (Search REST + Foundry Agent Service `api-version=v1` + ARM connections). The Talos Click CLI (`uv run talos deploy`) is the post-provision / CI entry point (see Foundry IQ hosted-agent quickstart `provision_kb.py` for the pattern). |
 | K9 | **Default CI = corpus contract tests only**; live Azure behind pytest markers | No Teams tenant in CI. Layers 2–4 require `az login` + deployed env. Layer 5 (`teams`) is opt-in `E2E_TEAMS=1`. |
 | K10 | **Synthetic watermark on every document** | `SYNTHETIC — DEMO ONLY` as the first visible line. Prevents anyone treating numbers as real policy. |
-| K11 | **CPython 3.14 is the default interpreter** | Final product decision. Operator host has `/opt/homebrew/opt/python@3.14`. Pin with `uv python pin 3.14` (commits `.python-version`). Every PEP 723 script and `pyproject.toml` uses `requires-python = ">=3.14"`. `[tool.uv] python-preference = "managed"` so `uv run` downloads 3.14 if the host interpreter is missing. The shebang `#!/usr/bin/env -S uv run --script` honors that pin. Generator, provisioner, and pytest all run on 3.14. **Do not document 3.12 as the default.** |
-| K12 | **Commit generated Markdown** under `data/credit-policies/` | Presenters can open files without Azure. Script remains the source of regeneration and blob upload. |
+| K11 | **CPython 3.14 is the default interpreter** | Final product decision. Operator host has `/opt/homebrew/opt/python@3.14`. Pin with `uv python pin 3.14` (commits `.python-version`). `pyproject.toml` uses `requires-python = ">=3.14"`. `[tool.uv] python-preference = "managed"` so `uv run` downloads 3.14 if the host interpreter is missing. Talos and pytest all run on 3.14. **Do not document 3.12 as the default.** Do **not** use PEP 723 `uv run --script` shebangs. |
+| K12 | **Commit generated Markdown** under `data/credit-policies/` | Presenters can open files without Azure. `uv run talos generate` remains the source of regeneration and blob upload. |
 | K13 | **Default Azure region = `swedencentral`** | [Search region support](https://learn.microsoft.com/en-us/azure/search/search-region-support) footnote **2** blocks **new** Search services in `eastus`, `eastus2`, `westus`, `westus3` (also `germanywestcentral`, `northeurope`, `uaenorth`). Sweden Central has agentic retrieval, AI enrichment, semantic ranker, and Foundry GlobalStandard `gpt-5-mini` + `text-embedding-3-large` ([model region matrix](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure-region-availability?pivots=standard), 2026-09-03). Backups: `canadaeast`, `centralus`, `uksouth`, `francecentral`. **Not** `westus2`: Search is fine there, but Americas Global Standard columns do not include `westus2`, so a single-region `azd up` cannot create the documented `GlobalStandard` `gpt-5-mini` deployment. Never default to eastus2. |
 | K14 | **Pin `azure-search-documents==12.1.0b2`** and pass `api_version="2026-08-01-preview"` | Stable `12.0.0` defaults to GA `2026-04-01` (no `messages`, no query planning). Preview `12.1.0b2` (2026-08-28) binds `2026-08-01-preview`. Do not use `>=11.6.0`. |
-| K15 | **On-demand indexer run after each blob upload**; no `ingestionSchedule` in v1 | Blob KS `ingestionSchedule` is omitted/`null`. Status is a poll surface, not a trigger. After KS create-or-update, and on later generator runs, `POST` run the generated indexer (`createdResources.indexer` from KS GET) then re-poll status. Blob last-modified change detection applies only when that indexer actually runs. Do not edit generated indexer JSON. |
+| K15 | **On-demand indexer run after each blob upload**; no `ingestionSchedule` in v1 | Blob KS `ingestionSchedule` is omitted/`null`. Status is a poll surface, not a trigger. After KS create-or-update, and after later `talos generate` uploads, `talos deploy` `POST`-runs the generated indexer (`createdResources.indexer` from KS GET) then re-polls status. Blob last-modified change detection applies only when that indexer actually runs. Do not edit generated indexer JSON. |
 | K16 | **Citation identifier = blob filename / original blob URL / `policy_id`**; `PromptAgentDefinition.temperature=0` | Connect docs require `【message_idx:search_idx†source_name】`; blob KS citation URLs are the original document URL. Generated indexes are not hand-edited, so Markdown section headings are not a promised payload. Temperature is a documented field on `PromptAgentDefinition`; set `0`. `gpt-5-mini` may ignore it — substring assertions still apply. |
 | K17 | **Local auth keys allowed; do not set `disableLocalAuth: true`** | **Decided 2026-09-12.** Keys may exist on the resource for support/demo; they are **never committed**. Microsoft Entra ID / `DefaultAzureCredential` remains the operator path. |
 | K18 | **This tenant allows custom Teams app sideload** | **Decided 2026-09-12.** Direct publish **Just you** is still the happy path. Sideload of the downloaded manifest ZIP is an **official in-scope fallback**, not a maybe. |
 | K19 | **Search Index Data Reader on the Foundry project MI** (MCP connection) | **Decided 2026-09-12.** The MCP `ProjectManagedIdentity` connection authenticates as the **project** system-assigned MI. Checklist 3b remains: if Teams 403s after playground works, **also** assign Search Index Data Reader to the agent instance identity. |
 | K20 | **No Application Insights in v1 Bicep** | **Decided 2026-09-12.** Skip App Insights / extra tracing resources. Use Foundry playground debug and Search retrieve `includeActivity`. |
+| K21 | **One Click CLI named `talos`**; no individual operator scripts | **Decided 2026-09-12.** GitHub CI/CD and local operators call `uv run talos <command>`. Console script via `[project.scripts] talos = "talos.cli:cli"`. Commands: `generate` (corpus), `deploy` (Foundry IQ + agent), `test` (pytest passthrough). Replaces `scripts/generate_credit_policies.py`, `scripts/provision_foundry_iq.py`, and `scripts/load_azd_env.fish`. `talos deploy` fills missing env from `azd env get-values` unless `--no-azd`. |
 
 ### Resolved 2026-09-12 (former Open Questions)
 
@@ -118,6 +120,7 @@ Brands below follow Microsoft Learn as of 2026-09. ARM types, REST/SDK identifie
 | Application Insights | **K20** skip for v1 | Prompt-agent playground + Search activity log is enough. |
 | Interpreter | **K11** CPython 3.14 | Already decided; do not reopen. |
 | Region | **K13** `swedencentral` | Already decided; do not reopen. |
+| Operator CLI | **K21** `uv run talos` (Click) | One package for generate / deploy / test. No PEP 723 scripts. |
 | Search API version | **K5** `2026-08-01-preview` | Already decided; revisit only if preview breaks. |
 
 ---
@@ -151,7 +154,7 @@ sequenceDiagram
 flowchart TD
   FACTS["FactsYaml"]
   TPL["PolicyTemplates"]
-  GEN["PolicyGeneratorScript"]
+  GEN["talos generate"]
   MD["PolicyMarkdown"]
   MAN["ManifestJson"]
   BLOB["Azure Blob Storage"]
@@ -171,13 +174,14 @@ flowchart TD
 | --- | --- | --- |
 | Corpus facts | `corpus/facts.yaml` | Unique testable numbers, committee names, dates. Generator and contract tests share this file. |
 | Templates | `corpus/templates/*.md.j2` | Jinja2 Markdown with watermark header and numbered sections. |
-| Generator | `scripts/generate_credit_policies.py` | Render, write local, upload blobs (metadata `content_sha256`), write manifest. Does **not** run the Search indexer. |
+| Talos CLI | `src/talos/` (`uv run talos`) | Click package. Operator and GitHub Actions entry point. Commands: `generate`, `deploy`, `test`. |
+| Generator | `uv run talos generate` | Render, write local, upload blobs (metadata `content_sha256`), write manifest. Does **not** run the Search indexer. |
 | Infra | `infra/*.bicep`, `azure.yaml` | RG, storage, search, Foundry resource+**project with SystemAssigned MI**, model deployments, RBAC. |
-| Foundry IQ provisioner | `scripts/provision_foundry_iq.py` | PEP 723 uv script. Create/update KS, **run generated indexer**, poll status, create KB, ARM project connection, create agent version, pin `version_selector`. |
-| Agent instructions | `agents/credit-policy-agent.instructions.md` | Loaded by provisioner into `PromptAgentDefinition.instructions`. |
+| Foundry IQ provisioner | `uv run talos deploy` | Create/update KS, **run generated indexer**, poll status, create KB, ARM project connection, create agent version, pin `version_selector`. |
+| Agent instructions | `agents/credit-policy-agent.instructions.md` | Loaded by `talos deploy` into `PromptAgentDefinition.instructions`. |
 | Query catalog | `tests/fixtures/golden_queries.yaml` | E2E assertions. |
-| Tests | `tests/` | Layered pytest. |
-| Env helper | `scripts/load_azd_env.fish` | Fish: export canonical `azd` outputs; trim dotenv quotes; skip blank/`#` lines. Do not `| source` dotenv. Bash `eval "$(azd env get-values)"` already strips quotes. |
+| Tests | `tests/` | Layered pytest (`uv run talos test` or `uv run pytest`). |
+| Env | `talos` + `azd env get-values` | `talos deploy` / `talos generate` fill missing canonical env from `azd env get-values` (trim quotes; skip blank/`#`). `--no-azd` disables. Do not `| source` dotenv in fish. |
 | Teams smoke | `docs/teams-smoke-checklist.md` | Manual demo script. |
 
 ### Resource and object names (concrete)
@@ -271,30 +275,19 @@ azd env new credit-policy-demo
 azd env set AZURE_LOCATION swedencentral   # required; see region table. Do NOT use eastus2 / westus3 / westus2.
 azd up                                     # infra + RBAC + model deployments
 
-# Load azd outputs — canonical names only (see Env contract).
-# bash: eval already strips dotenv quotes.
-eval "$(azd env get-values)"
-# fish (user shell): do NOT pipe dotenv to `source`. Use the helper (trims quotes; skips blanks/#).
-source scripts/load_azd_env.fish
-# scripts/load_azd_env.fish:
-#   for line in (azd env get-values)
-#       set line (string trim -- $line)
-#       if test -z $line; or string match -q '#*' -- $line
-#           continue
-#       end
-#       set kv (string split -m 1 -- '=' $line)
-#       set -gx $kv[1] (string trim -c '"\'' -- $kv[2])
-#   end
+# Talos reads canonical azd outputs itself (see Env contract). Optional:
+#   bash: eval "$(azd env get-values)"
+#   fish: do NOT pipe dotenv to `source`; omit this — talos calls `azd env get-values`.
+uv run talos generate
+uv run talos deploy --wait
 
-chmod +x scripts/generate_credit_policies.py scripts/provision_foundry_iq.py
-./scripts/generate_credit_policies.py
-./scripts/provision_foundry_iq.py --wait
-
-# Local corpus tests (no Azure)
-uv run pytest -m "unit" tests/
+# Local corpus + CLI tests (no Azure)
+uv run pytest
+# or: uv run talos test
 
 # Live layers (needs az login)
-uv run pytest -m "ingestion or retrieval or agent" tests/
+uv run pytest -m "ingestion or retrieval or agent" --override-ini addopts=
+# or: uv run talos test -m "ingestion or retrieval or agent" --override-ini addopts=
 ```
 
 Then in the Microsoft Foundry portal: playground smoke, then **Publish → Teams and Microsoft 365 Copilot → Direct publish → Just you**.
@@ -307,69 +300,82 @@ Bicep outputs and pytest fixtures use **exactly** these names. Do not also read 
 | --- | --- | --- |
 | `AZURE_LOCATION` | `azd env set` (required) | all |
 | `AZURE_RESOURCE_GROUP` | Bicep output | operator |
-| `AZURE_STORAGE_ACCOUNT_URL` | Bicep: `https://{st}.blob.core.windows.net` | generator, ingestion tests |
-| `AZURE_STORAGE_RESOURCE_ID` | Bicep ARM id | provisioner KS `ResourceId=` |
-| `AZURE_SEARCH_ENDPOINT` | Bicep: `https://{search}.search.windows.net` | provisioner, retrieval tests |
-| `AZURE_AI_PROJECT_ENDPOINT` | Bicep: `https://{account}.services.ai.azure.com/api/projects/{project}` | provisioner, agent tests |
+| `AZURE_STORAGE_ACCOUNT_URL` | Bicep: `https://{st}.blob.core.windows.net` | `talos generate`, ingestion tests |
+| `AZURE_STORAGE_RESOURCE_ID` | Bicep ARM id | `talos deploy` KS `ResourceId=` |
+| `AZURE_SEARCH_ENDPOINT` | Bicep: `https://{search}.search.windows.net` | `talos deploy`, retrieval tests |
+| `AZURE_AI_PROJECT_ENDPOINT` | Bicep: `https://{account}.services.ai.azure.com/api/projects/{project}` | `talos deploy`, agent tests |
 | `AZURE_AI_PROJECT_RESOURCE_ID` | Bicep ARM id of the **project** | ARM connection PUT |
 | `AZURE_AI_SERVICES_ENDPOINT` | Bicep: the Foundry resource endpoint Search accepts as `azureOpenAIParameters.resourceUri` (REST field name is unchanged). Confirm in-region; do **not** assume `.openai.azure.com`. Prefer `https://{customSubDomain}.services.ai.azure.com`; older resources may still be `https://{customSubDomain}.cognitiveservices.azure.com` or `https://{customSubDomain}.openai.azure.com`. | KS/KB model `resourceUri` |
 | `AZURE_AI_PROJECT_PRINCIPAL_ID` | Bicep: project **SystemAssigned** `principalId` | docs / debug; RBAC is in Bicep |
 
-Optional: `AZURE_STORAGE_CONNECTION_STRING` for local generator only; never committed.
+Optional: `AZURE_STORAGE_CONNECTION_STRING` for `talos generate` only; never committed.
 
-### `scripts/provision_foundry_iq.py` (PEP 723 uv script)
+### Talos CLI (`uv run talos`)
 
-Same shebang as the generator. Not a project module.
+Project package `talos` in `src/talos/`. Console script: `[project.scripts] talos = "talos.cli:cli"`. Dependencies live in `pyproject.toml` (not PEP 723 inline metadata). CPython **3.14**. GitHub Actions and local operators use this as the only Python entry point.
 
-```python
-#!/usr/bin/env -S uv run --script
-#
-# /// script
-# requires-python = ">=3.14"
-# dependencies = [
-#   "azure-identity>=1.21.0",
-#   "azure-search-documents==12.1.0b2",
-#   "azure-ai-projects>=2.0.0,<3",
-#   "requests>=2.32.0",
-# ]
-# ///
-```
+| Command | What it does |
+| --- | --- |
+| `uv run talos generate` | Render corpus, write `data/credit-policies/`, optional blob upload. Does not run the Search indexer. |
+| `uv run talos deploy` | Idempotent Foundry IQ provision: KS, indexer run, KB, ARM MCP connection, agent version. |
+| `uv run talos test` | Pytest passthrough. Extra args forwarded. Default `uv run pytest` is unit-only (`addopts = "-m unit"`). |
 
-Lock with `uv lock --script scripts/provision_foundry_iq.py` → `scripts/provision_foundry_iq.py.lock`.
+Missing Azure env (when required) exits **2**. CLI flags override process env; remaining gaps are filled from `azd env get-values` (quotes stripped, blank/`#` skipped) unless `--no-azd`.
+
+Layout:
 
 ```
-usage: provision_foundry_iq.py [-h]
-    [--search-endpoint URL]           # default $AZURE_SEARCH_ENDPOINT
-    [--project-endpoint URL]          # default $AZURE_AI_PROJECT_ENDPOINT
-    [--project-resource-id ID]        # default $AZURE_AI_PROJECT_RESOURCE_ID
-    [--storage-resource-id ID]        # default $AZURE_STORAGE_RESOURCE_ID
-    [--ai-services-endpoint URL]      # default $AZURE_AI_SERVICES_ENDPOINT (KS/KB resourceUri)
-    [--container NAME]                # default credit-policies
-    [--knowledge-source NAME]         # default ks-credit-policies
-    [--knowledge-base NAME]           # default kb-credit-policies
-    [--agent-name NAME]               # default credit-policy-agent
-    [--connection-name NAME]          # default conn-kb-credit-policies
-    [--chat-deployment NAME]          # default gpt-5-mini
-    [--embedding-deployment NAME]     # default text-embedding-3-large
-    [--wait]                          # poll KS status until lastSynchronizationState.endTime
-    [--skip-indexer-run]              # first-time KS create only; default is always POST run indexer
-    [--skip-endpoint-patch]           # do not PATCH agent_endpoint (default on if activity protocol already enabled)
-    [--dry-run]
+src/talos/
+  __init__.py
+  __main__.py          # python -m talos
+  cli.py               # click group
+  constants.py         # API versions, default names, env contract keys
+  env.py               # azd env parse + missing-env exit 2
+  errors.py
+  provision.py         # talos deploy
+  rest.py              # bearer REST (Search + ARM + Foundry PATCH)
+  generate.py          # talos generate (corpus)
 ```
 
-Idempotent algorithm:
+### `uv run talos deploy`
 
-1. `SearchIndexClient(endpoint, credential, api_version="2026-08-01-preview")` (or REST fallback with `https://search.azure.com/.default`).
-2. `create_or_update` KS. Connection string: Learn blob-KS form `"ResourceId={AZURE_STORAGE_RESOURCE_ID}"` with **no** trailing semicolon. If create 400s, retry `"ResourceId={id};"` and record which `2026-08-01-preview` accepted.
-3. `GET` KS; read `azureBlobParameters.createdResources.indexer` (do not guess the name).
-4. Unless `--skip-indexer-run`: `POST {search}/indexers/{indexerName}/run?api-version=2026-08-01-preview`. Running the generated indexer is allowed; editing it is not.
+Replaces the planned `scripts/provision_foundry_iq.py`. Search KS/KB/indexer and ARM connections are REST (`2026-08-01-preview` / `2025-10-01-preview`); agent `create_version` uses `azure-ai-projects`. Version pin is a merge-patch of **only** `agent_endpoint.version_selector`.
+
+```
+usage: talos deploy [OPTIONS]
+    --search-endpoint URL             # default $AZURE_SEARCH_ENDPOINT
+    --project-endpoint URL            # default $AZURE_AI_PROJECT_ENDPOINT
+    --project-resource-id ID          # default $AZURE_AI_PROJECT_RESOURCE_ID
+    --storage-resource-id ID          # default $AZURE_STORAGE_RESOURCE_ID
+    --ai-services-endpoint URL        # default $AZURE_AI_SERVICES_ENDPOINT (KS/KB resourceUri)
+    --container NAME                  # default credit-policies
+    --knowledge-source NAME           # default ks-credit-policies
+    --knowledge-base NAME             # default kb-credit-policies
+    --agent-name NAME                 # default credit-policy-agent
+    --connection-name NAME            # default conn-kb-credit-policies
+    --chat-deployment NAME            # default gpt-5-mini
+    --embedding-deployment NAME       # default text-embedding-3-large
+    --instructions PATH               # default agents/credit-policy-agent.instructions.md
+    --wait                            # poll KS status until lastSynchronizationState.endTime
+    --skip-indexer-run                # first-time KS create only; default is always POST run indexer
+    --skip-endpoint-patch             # do not PATCH agent_endpoint (default on if activity protocol already enabled)
+    --dry-run
+    --no-azd                          # do not fill missing env from `azd env get-values`
+```
+
+Idempotent algorithm (`src/talos/provision.py`):
+
+1. Search REST with `https://search.azure.com/.default` (`PUT`/`GET` knowledge sources, `POST` indexer run, `PUT` knowledge bases). SDK `SearchIndexClient` is optional; REST is the v1 path so preview schema drift is explicit.
+2. `PUT` KS. Connection string: Learn blob-KS form `"ResourceId={AZURE_STORAGE_RESOURCE_ID}"` with **no** trailing semicolon. If create 400s, retry `"ResourceId={id};"` and record which `2026-08-01-preview` accepted.
+3. `GET` KS; read `azureBlobParameters.createdResources.indexer` (do not guess the name). Retry briefly if the generated name is not yet present.
+4. Unless `--skip-indexer-run`: `POST {search}/indexers/{indexerName}/run?api-version=2026-08-01-preview`. 409 (already running) is success. Running the generated indexer is allowed; editing it is not.
 5. If `--wait`: poll `GET .../knowledgesources/{ks}/status` until `lastSynchronizationState.endTime` is set and `itemsUpdatesFailed == 0` (timeout 15 min). Require `itemUpdatesProcessed >= 12`.
-6. `create_or_update` KB (`outputMode: extractiveData` — REST `KnowledgeRetrievalOutputMode` enum; some Learn pages say `extractedData` — pin the spec, integration-test the create payload once).
-7. ARM PUT project connection.
+6. `PUT` KB (`outputMode: extractiveData` — REST `KnowledgeRetrievalOutputMode` enum; some Learn pages say `extractedData` — pin the spec, integration-test the create payload once).
+7. ARM `PUT` project connection (`2025-10-01-preview`). Retry 403 five times with 20 s backoff (RBAC propagation).
 8. `agents.create_version(...)` with `temperature=0`. Then pin traffic to that version.
    - **First provision (before Teams publish):** `PATCH /agents/{name}` `agent_endpoint.version_selector` `FixedRatio` 100% on the new version is OK. Default “always latest” is acceptable for demo **if** documented; still set Active version so playground matches tests.
    - **Do not** send a full `agents.update_details` / `PATCH agent_endpoint` that **replaces** `protocol_configuration` and `authorization_schemes`. [Configure agent](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/configure-agent) warns that this PATCH replaces those bags. After **Just you** publish, that would drop Activity protocol / `BotServiceRbac` and 403 Teams until republish. Hosted-agent samples that set `protocol_configuration=ProtocolConfiguration(responses=...)` only are **not** this Teams path.
-   - **After Teams publish:** do **not** re-run the provisioner’s `update_details`. Pin the Active version in the Foundry portal, **or** GET the current agent, merge-patch **only** `version_selector` while copying existing `protocol_configuration` and `authorization_schemes` unchanged. Add `--skip-endpoint-patch` (default **on** if `activity` is already enabled).
+   - **After Teams publish:** do **not** re-run `talos deploy`’s `update_details`. Pin the Active version in the Foundry portal, **or** GET the current agent, merge-patch **only** `version_selector` while copying existing `protocol_configuration` and `authorization_schemes` unchanged. `--skip-endpoint-patch` is default **on** if `activity` is already enabled.
 
 ---
 
@@ -553,7 +559,7 @@ agent = project_client.agents.create_version(
     ),
 )
 # Pin version_selector only via merge-patch that preserves protocol_configuration
-# (see provisioner algorithm). Do not replace agent_endpoint after Teams publish.
+# (see talos deploy algorithm). Do not replace agent_endpoint after Teams publish.
 ```
 
 Invoke (e2e agent tests):
@@ -600,16 +606,18 @@ Prerequisites for Teams:
 
 | Package | Role | Pin guidance |
 | --- | --- | --- |
-| `azure-storage-blob` | Dual-write | latest stable |
+| `click>=8.1` | Talos CLI | latest stable |
+| `azure-storage-blob` | Dual-write (`talos generate`) | latest stable |
 | `azure-identity` | `DefaultAzureCredential` | latest stable |
 | `azure-search-documents==12.1.0b2` | KS/KB/retrieve | Preview client for `2026-08-01-preview`. Pass `api_version` on clients. Not `>=11.6.0`. |
 | `azure-ai-projects>=2.0.0,<3` | Agents, Responses client | Current 2.x is **2.6.0** (2026-09-04). Do not pin a calendar GA date. |
-| `jinja2` | Templates | generator script only |
-| `pyyaml` | facts + golden queries | generator + tests |
-| `pytest`, `pytest-timeout` | e2e | tests extra |
+| `requests>=2.32.0` | Search / ARM / Foundry REST in `talos deploy` | latest stable |
+| `jinja2` | Templates (`talos generate`) | latest stable |
+| `pyyaml` | facts + golden queries | generate + tests |
+| `pytest`, `pytest-timeout` | e2e | `[dependency-groups] dev` |
 | Do **not** use `azure-ai-agents` as the primary client | Low-level / legacy vs `AIProjectClient.agents.create_version` | |
 
-Generator script deps stay in PEP 723 inline metadata. Test deps live in `pyproject.toml`.
+All runtime deps live in `pyproject.toml` `[project].dependencies`. No PEP 723 inline metadata. Test-only deps in `[dependency-groups] dev`.
 
 ---
 
@@ -621,7 +629,7 @@ No database. Artifacts:
 
 Each document has `id`, `title`, `filename`, `topics[]`, `version`, `effective_date`, and a `facts` map of **stable keys → exact strings/numbers** that tests assert.
 
-See [Document Generator Script](#document-generator-script) for the full 12-document fact table.
+See [Corpus generator](#corpus-generator-uv-run-talos-generate) for the full 12-document fact table.
 
 ### `data/credit-policies/manifest.json`
 
@@ -664,29 +672,15 @@ Do **not** hand-author. Blob KS creates `ks-credit-policies-index` (name is deri
 
 ### Migration
 
-Regenerate corpus → re-upload (hash skip) → **`provision_foundry_iq.py` (or equivalent) POST-runs the generated indexer** → poll KS status. There is no v1 `ingestionSchedule`; blob last-modified change detection applies only when the indexer actually runs. Changing KS ingestion parameters may require **delete KS + recreate** (e.g. `networkAccessMode` is create-only). Version policy documents by `id` + `version` in facts; bump `version` when a golden number changes and update `golden_queries.yaml`.
+Regenerate corpus → re-upload (hash skip) → **`uv run talos deploy` POST-runs the generated indexer** → poll KS status. There is no v1 `ingestionSchedule`; blob last-modified change detection applies only when the indexer actually runs. Changing KS ingestion parameters may require **delete KS + recreate** (e.g. `networkAccessMode` is create-only). Version policy documents by `id` + `version` in facts; bump `version` when a golden number changes and update `golden_queries.yaml`.
 
 ---
 
-## Document Generator Script
+## Corpus generator (`uv run talos generate`)
 
 ### Shape (required)
 
-`scripts/generate_credit_policies.py`:
-
-```python
-#!/usr/bin/env -S uv run --script
-#
-# /// script
-# requires-python = ">=3.14"
-# dependencies = [
-#   "azure-storage-blob>=12.24.0",
-#   "azure-identity>=1.21.0",
-#   "jinja2>=3.1.0",
-#   "pyyaml>=6.0",
-# ]
-# ///
-```
+Click command on the `talos` package (`src/talos/generate.py`, registered in `cli.py`). Not a PEP 723 script. Add generator deps to `pyproject.toml` with `uv add azure-storage-blob jinja2 pyyaml` and commit `uv.lock`.
 
 Python runtime: CPython **3.14** (K11). After clone:
 
@@ -695,33 +689,29 @@ uv python pin 3.14          # writes .python-version; commit it
 uv python install 3.14      # no-op if /opt/homebrew/opt/python@3.14 or a managed 3.14 exists
 ```
 
-`uv run` / the `uv run --script` shebang will download 3.14 when `python-preference = "managed"` and no 3.14 is on PATH. Do not target 3.12.
-
-Runnable as:
+`uv run` downloads 3.14 when `python-preference = "managed"` and no 3.14 is on PATH. Do not target 3.12.
 
 ```bash
-chmod +x scripts/generate_credit_policies.py
-./scripts/generate_credit_policies.py
-# or
-uv run scripts/generate_credit_policies.py
+uv run talos generate --help
+uv run talos generate --local-only
+uv run talos generate              # local + Azure when env is present
 ```
-
-Maintain deps with `uv add --script scripts/generate_credit_policies.py azure-storage-blob`. Lock with `uv lock --script scripts/generate_credit_policies.py` → `scripts/generate_credit_policies.py.lock`. Commit the lockfile.
 
 ### CLI
 
 ```
-usage: generate_credit_policies.py [-h]
-    [--out DIR]                 # default: repo_root/data/credit-policies
-    [--facts PATH]              # default: repo_root/corpus/facts.yaml
-    [--templates DIR]           # default: repo_root/corpus/templates
-    [--container NAME]          # default: credit-policies
-    [--account-url URL]         # or env AZURE_STORAGE_ACCOUNT_URL
-    [--local-only]              # no Azure
-    [--azure-only]              # no local write (still needs render)
-    [--dry-run]                 # render + log blob names, no write/upload
-    [--force]                   # upload even if hash matches
-    [--fail-if-missing-azure]   # exit 2 if Azure creds missing (CI ingestion)
+usage: talos generate [OPTIONS]
+    --out DIR                   # default: repo_root/data/credit-policies
+    --facts PATH                # default: repo_root/corpus/facts.yaml
+    --templates DIR             # default: repo_root/corpus/templates
+    --container NAME            # default: credit-policies
+    --account-url URL           # or env AZURE_STORAGE_ACCOUNT_URL
+    --local-only                # no Azure
+    --azure-only                # no local write (still needs render)
+    --dry-run                   # render + log blob names, no write/upload
+    --force                     # upload even if hash matches
+    --fail-if-missing-azure     # exit 2 if Azure creds missing (CI ingestion)
+    --no-azd                    # do not fill missing env from `azd env get-values`
 ```
 
 Mutually exclusive: `--local-only` | `--azure-only`. Default: both.
@@ -973,6 +963,10 @@ Teams (`E2E_TEAMS=1`) runs **only** the checklist query ids (`Q-RML-LTV-OO`, `Q-
 tests/
   conftest.py
   helpers.py
+  fakes.py                     # HTTP/agent fakes for CLI tests
+  test_cli.py                  # marker: unit
+  test_env.py                  # marker: unit
+  test_provision.py            # marker: unit (`talos deploy`)
   test_corpus_contract.py      # marker: unit
   test_ingestion.py            # marker: ingestion
   test_retrieval.py            # marker: retrieval
@@ -986,31 +980,37 @@ tests/
 
 ```toml
 [project]
-name = "credit-policy-agent-tests"
+name = "talos"
 version = "0.1.0"
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+  "click>=8.1",
+  "azure-identity>=1.21.0",
+  "azure-search-documents==12.1.0b2",
+  "azure-ai-projects>=2.0.0,<3",
+  "azure-storage-blob>=12.24.0",
+  "jinja2>=3.1.0",
+  "pyyaml>=6.0",
+  "requests>=2.32.0",
+]
+
+[project.scripts]
+talos = "talos.cli:cli"
 
 [tool.uv]
 default-groups = ["dev"]
-package = false
 python-preference = "managed"   # uv downloads CPython 3.14 if missing; host already has /opt/homebrew/opt/python@3.14
 
 [dependency-groups]
 dev = [
   "pytest>=8.3",
   "pytest-timeout>=2.3",
-  "pyyaml>=6.0",
-  "azure-identity>=1.21.0",
-  "azure-storage-blob>=12.24.0",
-  "azure-search-documents==12.1.0b2",
-  "azure-ai-projects>=2.0.0,<3",
 ]
 
 [tool.pytest.ini_options]
 addopts = "-m unit"
 markers = [
-  "unit: corpus contract tests, no Azure",
+  "unit: corpus contract and CLI tests, no Azure",
   "ingestion: live blob + indexer status",
   "retrieval: live Foundry IQ retrieve",
   "agent: live Foundry agent Responses API",
@@ -1020,7 +1020,7 @@ testpaths = ["tests"]
 timeout = 180
 ```
 
-Default `uv run pytest` inherits `addopts = "-m unit"`. Live: `uv run pytest -m "ingestion or retrieval or agent" --override-ini addopts=` (or omit `-m unit` by overriding addopts). CI: `uv run pytest` is enough for PRs.
+Default `uv run pytest` (and `uv run talos test`) inherit `addopts = "-m unit"`. Live: `uv run pytest -m "ingestion or retrieval or agent" --override-ini addopts=` (or `uv run talos test` with the same args). CI PRs: `uv run pytest` is enough.
 
 ### Fixtures (`tests/conftest.py`)
 
@@ -1037,7 +1037,7 @@ Default `uv run pytest` inherits `addopts = "-m unit"`. Live: `uv run pytest -m 
 | `project_client` | session | `AIProjectClient` |
 | `agent_name` | session | `credit-policy-agent` |
 
-Secrets: **never** in git. Use `az login` or GitHub OIDC. Optional `.env` loaded only if `python-dotenv` present and file exists; `.env` is gitignored. Export via `eval "$(azd env get-values)"` (bash; strips quotes) or `source scripts/load_azd_env.fish` (fish; trims quotes, skips blank/`#`). Canonical names are listed in **Env contract**.
+Secrets: **never** in git. Use `az login` or GitHub OIDC. Optional `.env` loaded only if `python-dotenv` present and file exists; `.env` is gitignored. `talos generate` / `talos deploy` call `azd env get-values` for missing canonical names (quotes stripped). Bash may still `eval "$(azd env get-values)"` for pytest; fish should not `| source` dotenv. Canonical names are listed in **Env contract**.
 
 ### Layer 1 — Corpus contract (`unit`)
 
@@ -1062,7 +1062,7 @@ Live Azure.
 - `get_knowledge_source_status("ks-credit-policies")`: `lastSynchronizationState.itemsUpdatesFailed == 0` and processed ≥ 12 (or `itemUpdatesProcessed >= 12`).
 - Optional: generated index document count via Search documents API if the generated index name is read from `azureBlobParameters.createdResources.index`.
 
-Skip unless env present. Timeout 60 s (status only; do not wait for a full reindex in the test — provisioner already waited).
+Skip unless env present. Timeout 60 s (status only; do not wait for a full reindex in the test — `talos deploy --wait` already waited).
 
 ### Layer 3 — Retrieval (`retrieval`)
 
@@ -1123,11 +1123,17 @@ Automated options (pick one if implementing; otherwise skip and use checklist):
 
 ### CI
 
-`.github/workflows/test.yml`:
+Local loop (`gmake`, GNU Make ≥ 4.4): `check` (ruff + unit pytest), `generate`, `preflight`, `deploy` (`talos deploy --wait`), `e2e` (live markers). Ship with `gmake release major|minor|patch` (bump, CHANGELOG, tag, `gh release create`). That GitHub release is what CI deploys.
 
-- Setup: `astral-sh/setup-uv` then `uv python pin 3.14` / `uv python install 3.14` (do not use `actions/setup-python` with 3.12).
-- PR: `uv run pytest` (inherits `addopts = "-m unit"`, CPython 3.14)
-- `workflow_dispatch` / nightly (optional): GitHub environment `credit-policy-live`; federated credential on a user-assigned identity with Operator roles **minus** Azure Bot Service Contributor (RBAC display name unchanged); secrets/vars: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZD_ENV_NAME=credit-policy-demo`. Then `azd env select` + live pytest with addopts overridden.
+`.github/workflows/test.yml` (every push and pull request):
+
+- Setup: `astral-sh/setup-uv` then `uv python install 3.14` (do not use `actions/setup-python` with 3.12).
+- `uv run pytest` (inherits `addopts = "-m unit"`, CPython 3.14)
+
+`.github/workflows/deploy.yml` (`release: types: [published]` only, when `AZURE_CLIENT_ID` is set):
+
+- GitHub environment `credit-policy-live`; federated credential on a user-assigned identity with Operator roles **minus** Azure Bot Service Contributor (RBAC display name unchanged); vars: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZD_ENV_NAME=credit-policy-demo`.
+- `azd env select` → export outputs → `uv run talos deploy --wait` → live pytest with addopts overridden.
 
 Cassettes (optional later): `pytest-recording` for retrieve JSON. Agent answers drift — do not cassette layer 4 as the primary gate.
 
@@ -1148,14 +1154,24 @@ Cassettes (optional later): `pytest-recording` for retrieve JSON. Agent answers 
 ```
 .
 ├── azure.yaml
-├── pyproject.toml                   # requires-python = ">=3.14"; python-preference = "managed"
+├── Makefile                         # gmake check / generate / deploy / e2e / release
+├── changelog                        # Keep-a-Changelog helper for gmake release
+├── CHANGELOG.md
+├── pyproject.toml                   # package talos; requires-python = ">=3.14"; python-preference = "managed"
 ├── .python-version                  # from `uv python pin 3.14`
-├── uv.lock                          # tests/dev project lock
-├── .gitignore                       # .env, .azure/, __pycache__, .pytest_cache
+├── uv.lock                          # project lock
+├── .gitignore                       # .env, .azure/, __pycache__, .pytest_cache, .release-notes
+├── src/
+│   └── talos/                       # Click CLI (`uv run talos generate|deploy|test`)
+│       ├── cli.py
+│       ├── generate.py              # corpus
+│       ├── provision.py             # Foundry IQ + agent
+│       └── env.py                   # azd env get-values
 ├── .github/
 │   └── workflows/
-│       └── test.yml                 # PR: unit only
-├── README.md                        # how to azd up + generate + test + publish Teams
+│       ├── test.yml                 # every push/PR: unit (`uv run pytest`)
+│       └── deploy.yml               # GitHub release published → OIDC + talos deploy --wait + live pytest
+├── README.md                        # how to azd up + talos generate/deploy/test + publish Teams
 ├── agents/
 │   └── credit-policy-agent.instructions.md
 ├── corpus/
@@ -1189,15 +1205,13 @@ Cassettes (optional later): `pytest-recording` for retrieve JSON. Agent answers 
 │   │   ├── foundry.bicep            # account, project, deployments
 │   │   └── rbac.bicep
 │   └── abbreviations.json           # optional
-├── scripts/
-│   ├── generate_credit_policies.py
-│   ├── generate_credit_policies.py.lock
-│   ├── provision_foundry_iq.py      # PEP 723 uv script (same shebang as generator)
-│   ├── provision_foundry_iq.py.lock
-│   └── load_azd_env.fish            # fish: trim dotenv quotes; skip blank/#
 └── tests/
     ├── conftest.py
     ├── helpers.py
+    ├── fakes.py
+    ├── test_cli.py
+    ├── test_env.py
+    ├── test_provision.py
     ├── test_corpus_contract.py
     ├── test_ingestion.py
     ├── test_retrieval.py
@@ -1264,7 +1278,7 @@ Synthesis in the KB produces a finished answer (tutorial playground). FAQ recomm
 | Jailbreak / “ignore policy” | **High** | Instructions + `Q-ADV-*` tests |
 | Secrets in git | **High** | No connection strings committed. **K17:** do not set `disableLocalAuth: true`; keys may exist on the resource but never in git. Operator uses Microsoft Entra ID. |
 | Treating synthetic policy as real | **Medium** | Watermark; agent discloses synthetic when asked |
-| PII in traces | **Medium** | Instructions forbid echoing PII; do not log document bodies or user prompts at INFO in our scripts (log query ids only) |
+| PII in traces | **Medium** | Instructions forbid echoing PII; do not log document bodies or user prompts at INFO in Talos (log query ids only) |
 | Over-sharing in Teams | **Medium** | Publish **Just you**; org-wide needs admin + BotServiceTenant |
 | Prompt injection via retrieved docs | **Low** (we author docs) | Still include “ignore the policy” only in user tests, not in corpus |
 | Public blob container | **Low** | Container private; Search MI reads; no anonymous access |
@@ -1297,7 +1311,7 @@ Enable the default Foundry content filter on `gpt-5-mini`. Do not disable jailbr
 
 | Signal | Where | What |
 | --- | --- | --- |
-| Generator | stdout table | uploaded vs skipped, hashes |
+| `talos generate` | stdout table | uploaded vs skipped, hashes |
 | Indexer / KS | `GET knowledgesources/.../status` | `itemsUpdatesFailed`, errors[].docURL |
 | Retrieve | `includeActivity: true` | modelQueryPlanning tokens, azureBlob subquery text, elapsedMs |
 | Agent | Responses payload + Foundry playground | tool calls, citations |
@@ -1312,7 +1326,7 @@ Alerting is out of scope for the demo. For a live walkthrough, the presenter wat
 
 1. **PR1–PR3** land corpus + tests that pass offline.
 2. **PR4** `azd up` with `AZURE_LOCATION=swedencentral` (not eastus2); confirm Search + two deployments Succeeded.
-3. **PR5** generate + provision IQ; playground query `Q-RML-LTV-OO`.
+3. **PR5** `talos generate` + `talos deploy --wait`; playground query `Q-RML-LTV-OO`.
 4. **PR6** live pytest markers locally.
 5. **Publish Just you**; run Teams checklist.
 6. If a wider audience is needed: republish **People in your organization** and wait for Microsoft 365 admin approval.
@@ -1321,9 +1335,9 @@ Feature flags: none. Environment is the flag (`local-only` vs live Azure vs `E2E
 
 Rollback:
 
-- Agent: pin `version_selector` to previous version (`FixedRatio` 100% on prior version) — endpoint URL unchanged, no Teams republish. After Teams publish, pin in the **portal** or merge-patch **only** `version_selector` (preserve `protocol_configuration.activity` and `BotServiceRbac`). Do not re-run the provisioner’s full `update_details`.
-- Bad corpus: revert git `data/credit-policies`, re-run generator upload, wait for indexer.
-- Bad KS: delete KB then KS (KS delete fails if referenced), recreate via provisioner.
+- Agent: pin `version_selector` to previous version (`FixedRatio` 100% on prior version) — endpoint URL unchanged, no Teams republish. After Teams publish, pin in the **portal** or merge-patch **only** `version_selector` (preserve `protocol_configuration.activity` and `BotServiceRbac`). Do not re-run `talos deploy`’s full `update_details`.
+- Bad corpus: revert git `data/credit-policies`, re-run `uv run talos generate`, then `uv run talos deploy --wait`.
+- Bad KS: delete KB then KS (KS delete fails if referenced), recreate via `uv run talos deploy --wait`.
 - Infra: `azd down` (destroys demo RG).
 
 ---
@@ -1332,12 +1346,12 @@ Rollback:
 
 | Risk | Severity | Mitigation |
 | --- | --- | --- |
-| `2026-08-01-preview` breaking changes; portal vs REST schema drift | **High** | Pin api-version in one constants module; re-read migrate doc before each sprint; prefer REST JSON in provisioner if SDK lags |
+| `2026-08-01-preview` breaking changes; portal vs REST schema drift | **High** | Pin api-version in `src/talos/constants.py`; re-read migrate doc before each sprint; prefer REST JSON in `talos deploy` if SDK lags |
 | Search capacity / region blocked | **High** if default is eastus2 | Default `swedencentral`; never eastus2/westus3; backups `uksouth`, `francecentral`, `canadaeast`, `centralus`. Not `westus2` (no GS `gpt-5-mini`). |
 | Basic semantic-ranker concurrency = 2 per SU | **Medium** | Serialize demo chats; do not claim 10 overlapping users |
 | `gpt-5-mini` quota in `swedencentral` | **Medium** | **K6** is `gpt-5-mini`; parameter `chatCapacity` (50k TPM). Do not silently swap to `gpt-5.4-mini`. |
-| Role assignment propagation (403 on MCP) | **Medium** | Provisioner retries 5× with 20 s backoff; **K19** project MI; checklist 3b for agent identity |
-| First indexer run incomplete → empty retrieve | **Medium** | Provisioner polls KS status; tests skip with message if processed < 12 |
+| Role assignment propagation (403 on MCP) | **Medium** | `talos deploy` retries 5× with 20 s backoff; **K19** project MI; checklist 3b for agent identity |
+| First indexer run incomplete → empty retrieve | **Medium** | `talos deploy --wait` polls KS status; tests skip with message if processed < 12 |
 | Agent does not call MCP tool | **High** | Strong instructions; `allowed_tools` only retrieve; e2e fails on invented numbers |
 | Direct publish fails | **Low** | **K18:** sideload ZIP is allowed in this tenant (official fallback) |
 | Double billing (Search retrieval tokens + Foundry Models plan + agent) | **Low** | Demo volume tiny; stay on Search free retrieval allowance until exhausted then Basic standard plan |
@@ -1347,7 +1361,7 @@ Rollback:
 
 ## Open Questions
 
-None remaining — all product choices closed (see Key Decisions K5–K6, K11, K13, K17–K20 and the Resolved 2026-09-12 table). Do not reopen chat model, local auth, sideload, Search Data Reader identity, App Insights, Python 3.14, or region.
+None remaining — all product choices closed (see Key Decisions K5–K6, K11, K13, K17–K21 and the Resolved 2026-09-12 table). Do not reopen chat model, local auth, sideload, Search Data Reader identity, App Insights, Python 3.14, region, or the Talos CLI.
 
 ---
 
@@ -1383,7 +1397,7 @@ Do not put agent code as an `azd` service in v1 (no hosted container).
 
 Outputs (canonical env names): `AZURE_STORAGE_ACCOUNT_URL`, `AZURE_STORAGE_RESOURCE_ID`, `AZURE_SEARCH_ENDPOINT`, `AZURE_AI_PROJECT_ENDPOINT`, `AZURE_AI_PROJECT_RESOURCE_ID`, `AZURE_AI_PROJECT_PRINCIPAL_ID`, `AZURE_AI_SERVICES_ENDPOINT` (the `resourceUri` Search accepts), container name, deployment names. Confirm `AZURE_AI_SERVICES_ENDPOINT` once in `swedencentral`; do not assume `.openai.azure.com`.
 
-Post-provision: **do not** create KS in Bicep. Document running `scripts/provision_foundry_iq.py`. Optional `azd` hook `postprovision` that runs it if `RUN_FOUNDRY_IQ=1`.
+Post-provision: **do not** create KS in Bicep. Document `uv run talos generate && uv run talos deploy --wait`. Optional `azd` hook `postprovision` that runs those commands if `RUN_FOUNDRY_IQ=1`.
 
 Cost ballpark (demo, always-on): Search Basic ~ tens of USD/month; Foundry S0 + tokens negligible at walkthrough concurrency; Storage cents. Tear down with `azd down` after the event.
 
@@ -1435,7 +1449,8 @@ Cost ballpark (demo, always-on): Search Basic ~ tens of USD/month; Foundry S0 + 
 
 ### Tooling
 
-- [uv running scripts / PEP 723 / shebang](https://docs.astral.sh/uv/guides/scripts/#declaring-script-dependencies)
+- [uv projects / `uv run`](https://docs.astral.sh/uv/concepts/projects/) — package + `[project.scripts]` console script (`talos`)
+- [Click](https://click.palletsprojects.com/) — Talos CLI
 - [azure-ai-projects changelog](https://github.com/Azure/azure-sdk-for-python/blob/main/sdk/ai/azure-ai-projects/CHANGELOG.md) — current 2.6.0
 - [azure-search-documents](https://pypi.org/project/azure-search-documents/) — pin `12.1.0b2` for preview API
 - [azure-storage-blob](https://pypi.org/project/azure-storage-blob/)
@@ -1446,19 +1461,19 @@ Cost ballpark (demo, always-on): Search Basic ~ tens of USD/month; Foundry S0 + 
 
 Incremental, each PR independently reviewable and mergeable. No Azure required until PR4.
 
-### PR 1 — Repo skeleton and planning docs
+### PR 1 — Repo skeleton, Talos CLI, planning docs
 
-- **Title:** `docs: add credit policy agent plan and repo skeleton`
-- **Files:** `docs/credit-policy-agent-plan.md`, `README.md` (stub pointing at the plan), `.gitignore`, `pyproject.toml` (`requires-python = ">=3.14"`, `python-preference = "managed"`, markers + `addopts = "-m unit"`), `.python-version` (`uv python pin 3.14`)
+- **Title:** `feat: add talos Click CLI and credit policy agent plan`
+- **Files:** `docs/credit-policy-agent-plan.md`, `README.md`, `.gitignore`, `pyproject.toml` (package `talos`, `requires-python = ">=3.14"`, `python-preference = "managed"`, `[project.scripts]`, markers + `addopts = "-m unit"`), `.python-version` (`uv python pin 3.14`), `uv.lock`, `src/talos/*` (`deploy` + `test`), `tests/test_cli.py`, `tests/test_env.py`, `tests/test_provision.py`, `agents/credit-policy-agent.instructions.md`, `.github/workflows/test.yml`, `.github/workflows/deploy.yml`
 - **Depends on:** none
-- **Description:** Land this design and ignore rules. Pin CPython 3.14. **Do not** add `docs/teams-smoke-checklist.md` here — that is PR8 so the checklist is not an empty “done” file.
+- **Description:** Land this design, the `talos` package, CLI unit tests, and CI wiring. Pin CPython 3.14. `uv run talos deploy` is the Foundry IQ provisioner (mocked Azure in unit tests). **Do not** add `docs/teams-smoke-checklist.md` here — that is PR8 so the checklist is not an empty “done” file.
 
 ### PR 2 — Synthetic corpus generator (local-only)
 
-- **Title:** `feat: uv script to generate synthetic credit policy markdown`
-- **Files:** `scripts/generate_credit_policies.py` (+ lock), `corpus/facts.yaml`, `corpus/templates/*.md.j2`, generated `data/credit-policies/*`
+- **Title:** `feat: talos generate synthetic credit policy markdown`
+- **Files:** `src/talos/generate.py`, `src/talos/cli.py` (`generate` command), `corpus/facts.yaml`, `corpus/templates/*.md.j2`, generated `data/credit-policies/*`, `pyproject.toml` (`jinja2`, `pyyaml`, `azure-storage-blob`)
 - **Depends on:** PR 1
-- **Description:** Implement CLI (`--local-only`, `--dry-run`, `--out`). No Azure. Watermark + per-key uniqueness. Commit rendered MD + manifest.
+- **Description:** Implement `uv run talos generate --local-only` (`--dry-run`, `--out`). No Azure. Watermark + per-key uniqueness. Commit rendered MD + manifest.
 
 ### PR 3 — Corpus contract tests and golden queries
 
@@ -1470,23 +1485,23 @@ Incremental, each PR independently reviewable and mergeable. No Azure required u
 ### PR 4 — Azure infra (azd + Bicep)
 
 - **Title:** `infra: azd/Bicep for storage, Azure AI Search Basic, Microsoft Foundry, Foundry Models, RBAC`
-- **Files:** `azure.yaml` (`module: main`), `infra/main.bicep`, `infra/main.parameters.json`, `infra/modules/*`, `scripts/load_azd_env.fish`
+- **Files:** `azure.yaml` (`module: main`), `infra/main.bicep`, `infra/main.parameters.json`, `infra/modules/*`
 - **Depends on:** PR 1
-- **Description:** Provision demo RG. **Accept criteria:** `azd env set AZURE_LOCATION swedencentral` then `azd up`; Search Basic + `gpt-5-mini` GlobalStandard + `text-embedding-3-large` **Succeeded** in a **non-footnote-2** region that is also on the GS matrix. Project resource has SystemAssigned MI; `AZURE_AI_PROJECT_PRINCIPAL_ID` and `AZURE_AI_SERVICES_ENDPOINT` outputted. No knowledge source yet. Location preflight: do not use eastus2/westus3 (Search capacity) or westus2 (no GS `gpt-5-mini`). Backups: uksouth, francecentral, canadaeast, centralus.
+- **Description:** Provision demo RG. **Accept criteria:** `azd env set AZURE_LOCATION swedencentral` then `azd up`; Search Basic + `gpt-5-mini` GlobalStandard + `text-embedding-3-large` **Succeeded** in a **non-footnote-2** region that is also on the GS matrix. Project resource has SystemAssigned MI; `AZURE_AI_PROJECT_PRINCIPAL_ID` and `AZURE_AI_SERVICES_ENDPOINT` outputted. No knowledge source yet. Location preflight: do not use eastus2/westus3 (Search capacity) or westus2 (no GS `gpt-5-mini`). Backups: uksouth, francecentral, canadaeast, centralus. Talos loads these outputs via `azd env get-values` — do not add `scripts/load_azd_env.fish`.
 
 ### PR 5 — Blob dual-write (Azure path of generator)
 
-- **Title:** `feat: dual-write credit policies to Azure Blob Storage`
-- **Files:** `scripts/generate_credit_policies.py` (Azure upload, `--azure-only`, `--container`, `content_sha256` metadata)
+- **Title:** `feat: talos generate dual-write credit policies to Azure Blob Storage`
+- **Files:** `src/talos/generate.py` (Azure upload, `--azure-only`, `--container`, `content_sha256` metadata)
 - **Depends on:** PR 2, PR 4
-- **Description:** Idempotent hash uploads via blob metadata `content_sha256`. README: load canonical env then `./scripts/generate_credit_policies.py`.
+- **Description:** Idempotent hash uploads via blob metadata `content_sha256`. README: `uv run talos generate` after `azd up`.
 
-### PR 6 — Foundry IQ provisioner (KS, KB, connection, agent)
+### PR 6 — Live Foundry IQ deploy (KS, KB, connection, agent)
 
-- **Title:** `feat: provision blob knowledge source, knowledge base, MCP connection, and prompt agent`
-- **Files:** `scripts/provision_foundry_iq.py` (+ lock, PEP 723), `agents/credit-policy-agent.instructions.md`
+- **Title:** `feat: run talos deploy against live Foundry IQ`
+- **Files:** `src/talos/provision.py` (tweaks if live API differs), README runbook
 - **Depends on:** PR 5
-- **Description:** CLI flags mapped to azd outputs. KS create-or-update, POST generated indexer, poll status, KB, ARM connection, `create_version` with `temperature=0`. Pin `version_selector` only via merge-patch that preserves `protocol_configuration` / `authorization_schemes` (or `--skip-endpoint-patch` after Teams publish). **Accept criteria:** KS `itemsUpdatesFailed==0` and processed ≥ 12; playground `Q-RML-LTV-OO` returns `80%`. **Rollback:** delete KB then KS, re-run script. Retry 403 RBAC 5×20s. Do not re-run `update_details` after Just-you publish.
+- **Description:** `uv run talos deploy --wait` against azd outputs (command already in PR 1; this PR proves it). KS create-or-update, POST generated indexer, poll status, KB, ARM connection, `create_version` with `temperature=0`. Pin `version_selector` only via merge-patch that preserves `protocol_configuration` / `authorization_schemes` (or `--skip-endpoint-patch` after Teams publish). **Accept criteria:** KS `itemsUpdatesFailed==0` and processed ≥ 12; playground `Q-RML-LTV-OO` returns `80%`. **Rollback:** delete KB then KS, re-run `uv run talos deploy --wait`. Retry 403 RBAC 5×20s. Do not re-run `update_details` after Just-you publish.
 
 ### PR 7 — Live ingestion + retrieval + agent tests
 
@@ -1504,9 +1519,9 @@ Incremental, each PR independently reviewable and mergeable. No Azure required u
 
 ### PR 9 (optional follow-up) — REST publish automation + hosted-agent spike
 
-- **Title:** `feat: optional REST Teams publish script; spike hosted-agent alternative`
-- **Files:** `scripts/publish_teams.py` (optional), `docs/alternatives-hosted-agents.md`
+- **Title:** `feat: optional talos publish for Teams REST; spike hosted-agent alternative`
+- **Files:** `src/talos/` (`publish` command, optional), `docs/alternatives-hosted-agents.md`
 - **Depends on:** PR 8
-- **Description:** Only if portal publish is too clicky for repeats. Hosted-agent spike stays a doc unless product asks for custom cards.
+- **Description:** Only if portal publish is too clicky for repeats. Prefer a `talos publish` command over a new script. Hosted-agent spike stays a doc unless product asks for custom cards.
 
 Merge order: 1 → 2 → 3 can ship without Azure. 4 parallel after 1. 5 after 2+4. 6 after 5. 7 after 3+6. 8 after 6.

@@ -1,0 +1,57 @@
+name: deploy
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  deploy:
+    if: vars.AZURE_CLIENT_ID != ''
+    runs-on: ubuntu-latest
+    environment: credit-policy-live
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZD_ENV_NAME: ${{ vars.AZD_ENV_NAME }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install Python 3.14
+        run: uv python install 3.14
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+      - name: Install Azure Developer CLI
+        uses: Azure/setup-azd@v2
+      - name: Select azd environment
+        run: |
+          set -euo pipefail
+          azd config set auth.useAzCliAuth true
+          azd env select "${AZD_ENV_NAME}"
+      - name: Export azd outputs
+        run: |
+          set -euo pipefail
+          while IFS= read -r line; do
+            trimmed="${line#"${line%%[![:space:]]*}"}"
+            [[ -z "$trimmed" || "$trimmed" == \#* ]] && continue
+            key="${trimmed%%=*}"
+            value="${trimmed#*=}"
+            value="${value%\"}"
+            value="${value#\"}"
+            value="${value%\'}"
+            value="${value#\'}"
+            printf '%s=%s\n' "$key" "$value" >> "$GITHUB_ENV"
+          done < <(azd env get-values)
+      - name: Deploy Foundry IQ and agent
+        run: uv run talos deploy --wait
+      - name: Run live tests
+        run: uv run pytest -m "ingestion or retrieval or agent" --override-ini addopts=
