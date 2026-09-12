@@ -8,4 +8,5 @@ def clean_azure_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in REQUIRED_ENV:
         monkeypatch.delenv(name, raising=False)
     monkeypatch.delenv("AZURE_STORAGE_ACCOUNT_URL", raising=False)
+    monkeypatch.delenv("AZURE_STORAGE_CONNECTION_STRING", raising=False)
     monkeypatch.delenv("AZURE_RESOURCE_GROUP", raising=False)

@@ -24,9 +24,10 @@ STORAGE_ID = (
 AI_SERVICES = "https://aif-cp-demo.services.ai.azure.com"
 
 
-def test_root_help_lists_deploy_and_test() -> None:
+def test_root_help_lists_generate_deploy_and_test() -> None:
     result = CliRunner().invoke(cli, ["--help"])
     assert result.exit_code == 0
+    assert "generate" in result.output
     assert "deploy" in result.output
     assert "test" in result.output
 

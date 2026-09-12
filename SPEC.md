@@ -71,7 +71,7 @@ V28: fact-literals — threshold sentences use facts.yaml literals (`80%`, `USD 
 
 id|status|task|cites
 T1|x|init talos Click CLI deploy+test, CPython 3.14, plan docs, unit CLI tests, GHA unit workflow|V10,I.cmd
-T2|.|add talos generate local-only: facts.yaml, jinja templates, 12 MD + manifest, watermark, fact-key uniqueness|V2,V5,V28,I.cmd,I.file
+T2|x|add talos generate local-only: facts.yaml, jinja templates, 12 MD + manifest, watermark, fact-key uniqueness|V2,V5,V28,I.cmd,I.file
 T3|.|add corpus contract tests + 18 golden queries yaml|V5,V19,V20,I.pytest,I.golden
 T4|.|add azd+Bicep storage Search Basic Foundry project-MI models RBAC canonical outputs location swedencentral|V6,V8,V9,V11,V16,V17,V21,V23,I.infra,I.env,I.names
 T5|.|extend generate dual-write blobs content_sha256 skip|V5,V22,V26,I.cmd

@@ -8,5 +8,6 @@
 
 ### Added
 
-- **Talos CLI:** Click package `talos` (`uv run talos deploy` / `talos test`) provisions Foundry IQ and runs pytest. GitHub Actions deploy runs on `release: published`.
+- **Talos CLI:** Click package `talos` (`uv run talos generate` / `talos deploy` / `talos test`) renders the synthetic corpus, provisions Foundry IQ, and runs pytest. GitHub Actions deploy runs on `release: published`.
+- **Corpus generator:** `uv run talos generate --local-only` writes 12 watermarked Markdown policies plus `manifest.json` from `corpus/facts.yaml`.
 - **`gmake` recipes:** local `check`, `generate`, `deploy`, `e2e`, and `gmake release major|minor|patch` (bump, tag, `gh release create`).

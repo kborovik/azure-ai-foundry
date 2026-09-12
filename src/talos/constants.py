@@ -14,6 +14,26 @@ DEFAULT_CONNECTION_NAME = "conn-kb-credit-policies"
 DEFAULT_CHAT_DEPLOYMENT = "gpt-5-mini"
 DEFAULT_EMBEDDING_DEPLOYMENT = "text-embedding-3-large"
 DEFAULT_INSTRUCTIONS_RELATIVE = "agents/credit-policy-agent.instructions.md"
+DEFAULT_FACTS_RELATIVE = "corpus/facts.yaml"
+DEFAULT_TEMPLATES_RELATIVE = "corpus/templates"
+DEFAULT_OUTPUT_RELATIVE = "data/credit-policies"
+
+WATERMARK = "SYNTHETIC — DEMO ONLY"
+
+CORPUS_IDS = (
+    "CP-RML-2026-01",
+    "CP-CRE-2026-01",
+    "CP-UCL-2026-01",
+    "CP-SME-2026-01",
+    "CP-EXC-2026-01",
+    "CP-PRO-2026-01",
+    "CP-COL-2026-01",
+    "CP-DOC-2026-01",
+    "CP-RPL-2026-01",
+    "CP-ESG-2026-01",
+    "CP-CND-2026-01",
+    "CP-AUTH-2026-01",
+)
 
 MIN_INDEXED_ITEMS = 12
 WAIT_TIMEOUT_SECONDS = 15 * 60

@@ -11,19 +11,115 @@ from talos.constants import (
     DEFAULT_CONNECTION_NAME,
     DEFAULT_CONTAINER,
     DEFAULT_EMBEDDING_DEPLOYMENT,
+    DEFAULT_FACTS_RELATIVE,
     DEFAULT_INSTRUCTIONS_RELATIVE,
     DEFAULT_KNOWLEDGE_BASE,
     DEFAULT_KNOWLEDGE_SOURCE,
+    DEFAULT_OUTPUT_RELATIVE,
+    DEFAULT_TEMPLATES_RELATIVE,
 )
-from talos.env import require_env, resolve_env
+from talos.env import repo_root, require_env, resolve_env
 from talos.errors import TalosError
+from talos.generate import GenerateConfig, run_generate
 from talos.provision import DeployConfig, run_deploy
 
 
 @click.group()
 @click.version_option(version=__version__, prog_name="talos")
 def cli() -> None:
-    """Deploy and test the credit-policy agent on Microsoft Foundry."""
+    """Generate, deploy, and test the credit-policy agent on Microsoft Foundry."""
+
+
+@cli.command()
+@click.option(
+    "--out",
+    type=click.Path(path_type=Path, file_okay=False),
+    default=None,
+    help=f"Output directory. Default {DEFAULT_OUTPUT_RELATIVE}.",
+)
+@click.option(
+    "--facts",
+    "facts_path",
+    type=click.Path(path_type=Path, dir_okay=False),
+    default=None,
+    help=f"Facts YAML. Default {DEFAULT_FACTS_RELATIVE}.",
+)
+@click.option(
+    "--templates",
+    "templates_dir",
+    type=click.Path(path_type=Path, file_okay=False),
+    default=None,
+    help=f"Jinja template directory. Default {DEFAULT_TEMPLATES_RELATIVE}.",
+)
+@click.option("--container", default=DEFAULT_CONTAINER, show_default=True)
+@click.option(
+    "--account-url",
+    default=None,
+    help="Storage account URL. Default $AZURE_STORAGE_ACCOUNT_URL.",
+)
+@click.option(
+    "--local-only",
+    is_flag=True,
+    help="Write local files only; do not upload blobs.",
+)
+@click.option(
+    "--azure-only",
+    is_flag=True,
+    help="Upload blobs only; do not write local files.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Render and log paths without writing or uploading.",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Upload even if content_sha256 matches (Azure path).",
+)
+@click.option(
+    "--fail-if-missing-azure",
+    is_flag=True,
+    help="Exit 2 if Azure storage is not configured.",
+)
+@click.option(
+    "--no-azd",
+    is_flag=True,
+    help="Do not fill missing env vars from `azd env get-values`.",
+)
+def generate(
+    out: Path | None,
+    facts_path: Path | None,
+    templates_dir: Path | None,
+    container: str,
+    account_url: str | None,
+    local_only: bool,
+    azure_only: bool,
+    dry_run: bool,
+    force: bool,
+    fail_if_missing_azure: bool,
+    no_azd: bool,
+) -> None:
+    """Render synthetic credit-policy Markdown. Does not run the Search indexer."""
+    try:
+        root = repo_root()
+        config = GenerateConfig(
+            out=out or (root / DEFAULT_OUTPUT_RELATIVE),
+            facts_path=facts_path or (root / DEFAULT_FACTS_RELATIVE),
+            templates_dir=templates_dir or (root / DEFAULT_TEMPLATES_RELATIVE),
+            container=container,
+            account_url=account_url or "",
+            local_only=local_only,
+            azure_only=azure_only,
+            dry_run=dry_run,
+            force=force,
+            fail_if_missing_azure=fail_if_missing_azure,
+            use_azd=not no_azd,
+        )
+        run_generate(config, echo=click.echo)
+    except TalosError as exc:
+        click.echo(str(exc), err=True)
+        raise SystemExit(exc.exit_code) from exc
 
 
 @cli.command()
