@@ -7,9 +7,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, Protocol
 
 import yaml
+from azure.core.credentials import TokenCredential
+from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
 from jinja2 import (
     Environment,
     FileSystemLoader,
@@ -25,6 +27,8 @@ from talos.constants import (
 )
 from talos.env import azure_generate_configured, resolve_generate_env
 from talos.errors import TalosError
+
+MARKDOWN_CONTENT_TYPE = "text/markdown; charset=utf-8"
 
 Echo = Callable[[str], None]
 
@@ -72,7 +76,163 @@ class GenerateConfig:
     use_azd: bool = True
 
 
-def run_generate(config: GenerateConfig, echo: Echo = print) -> list[RenderedDocument]:
+@dataclass(frozen=True)
+class BlobAuth:
+    kind: Literal["connection_string", "credential"]
+    connection_string: str = ""
+    account_url: str = ""
+
+
+class BlobStore(Protocol):
+    def ensure_container(self) -> None: ...
+
+    def existing_sha256(self, blob_name: str) -> str | None: ...
+
+    def blob_url(self, blob_name: str) -> str: ...
+
+    def upload_markdown(
+        self, blob_name: str, data: bytes, metadata: dict[str, str]
+    ) -> str: ...
+
+
+class AzureBlobStore:
+    def __init__(self, service: Any, container: str) -> None:
+        self._service = service
+        self._container = container
+        self._client = service.get_container_client(container)
+
+    @classmethod
+    def from_connection_string(
+        cls, connection_string: str, container: str
+    ) -> AzureBlobStore:
+        from azure.storage.blob import BlobServiceClient
+
+        return cls(
+            BlobServiceClient.from_connection_string(connection_string), container
+        )
+
+    @classmethod
+    def from_url(
+        cls, account_url: str, container: str, credential: TokenCredential
+    ) -> AzureBlobStore:
+        from azure.storage.blob import BlobServiceClient
+
+        return cls(
+            BlobServiceClient(account_url=account_url, credential=credential),
+            container,
+        )
+
+    def ensure_container(self) -> None:
+        try:
+            self._client.create_container(public_access=None)
+        except ResourceExistsError:
+            return
+
+    def existing_sha256(self, blob_name: str) -> str | None:
+        blob = self._client.get_blob_client(blob_name)
+        try:
+            props = blob.get_blob_properties()
+        except ResourceNotFoundError:
+            return None
+        metadata = {
+            str(key).lower(): str(value)
+            for key, value in (props.metadata or {}).items()
+        }
+        digest = metadata.get("content_sha256")
+        return digest.lower() if digest else None
+
+    def blob_url(self, blob_name: str) -> str:
+        return str(self._client.get_blob_client(blob_name).url)
+
+    def upload_markdown(
+        self, blob_name: str, data: bytes, metadata: dict[str, str]
+    ) -> str:
+        from azure.storage.blob import ContentSettings
+
+        blob = self._client.get_blob_client(blob_name)
+        blob.upload_blob(
+            data,
+            overwrite=True,
+            metadata=metadata,
+            content_settings=ContentSettings(content_type=MARKDOWN_CONTENT_TYPE),
+        )
+        return str(blob.url)
+
+
+def resolve_blob_auth(env: dict[str, str], account_url: str = "") -> BlobAuth:
+    connection_string = env.get("AZURE_STORAGE_CONNECTION_STRING") or ""
+    if connection_string:
+        return BlobAuth(kind="connection_string", connection_string=connection_string)
+    url = account_url or env.get("AZURE_STORAGE_ACCOUNT_URL") or ""
+    if not url:
+        raise TalosError(
+            "Azure environment is not configured "
+            "(missing AZURE_STORAGE_ACCOUNT_URL or AZURE_STORAGE_CONNECTION_STRING). "
+            "Set the variables, run from an azd environment, or pass --account-url / --local-only.",
+            exit_code=2,
+        )
+    return BlobAuth(kind="credential", account_url=url)
+
+
+def open_blob_store(
+    env: dict[str, str],
+    *,
+    container: str,
+    account_url: str = "",
+    credential: TokenCredential | None = None,
+) -> BlobStore:
+    auth = resolve_blob_auth(env, account_url)
+    if auth.kind == "connection_string":
+        return AzureBlobStore.from_connection_string(auth.connection_string, container)
+    from azure.identity import DefaultAzureCredential
+
+    cred = credential or DefaultAzureCredential()
+    return AzureBlobStore.from_url(auth.account_url, container, cred)
+
+
+def blob_metadata(item: RenderedDocument) -> dict[str, str]:
+    return {
+        "content_sha256": item.content_sha256,
+        "policy_id": item.document.id,
+        "policy_version": item.document.version,
+        "synthetic": "true",
+    }
+
+
+def upload_blobs(
+    store: BlobStore,
+    rendered: list[RenderedDocument],
+    *,
+    force: bool,
+    local_dir: Path | None,
+    echo: Echo,
+) -> None:
+    try:
+        store.ensure_container()
+        for item in rendered:
+            name = item.document.filename
+            local = str(local_dir / name) if local_dir is not None else "-"
+            existing = None if force else store.existing_sha256(name)
+            if existing is not None and existing.lower() == item.content_sha256:
+                url = store.blob_url(name)
+                echo(f"{item.document.id}  {name}  local={local}  blob={url}  skipped")
+                continue
+            url = store.upload_markdown(
+                name, item.markdown.encode("utf-8"), blob_metadata(item)
+            )
+            echo(f"{item.document.id}  {name}  local={local}  blob={url}  uploaded")
+    except TalosError:
+        raise
+    except Exception as exc:
+        raise TalosError(f"Blob upload failed: {exc}", exit_code=1) from exc
+
+
+def run_generate(
+    config: GenerateConfig,
+    echo: Echo = print,
+    *,
+    blob_store: BlobStore | None = None,
+) -> list[RenderedDocument]:
     if config.local_only and config.azure_only:
         raise TalosError(
             "--local-only and --azure-only are mutually exclusive",
@@ -86,7 +246,8 @@ def run_generate(config: GenerateConfig, echo: Echo = print) -> list[RenderedDoc
     want_local = not config.azure_only
     want_azure = not config.local_only
     env = resolve_generate_env(use_azd=config.use_azd)
-    if want_azure:
+    store = blob_store
+    if want_azure and store is None:
         if not azure_generate_configured(env, config.account_url):
             if config.fail_if_missing_azure or config.azure_only:
                 raise TalosError(
@@ -97,14 +258,6 @@ def run_generate(config: GenerateConfig, echo: Echo = print) -> list[RenderedDoc
                 )
             echo("Azure not configured; writing local files only")
             want_azure = False
-        else:
-            echo("Azure blob upload is not implemented; writing local files only")
-            want_azure = False
-            if config.azure_only:
-                raise TalosError(
-                    "Azure blob upload is not implemented; use --local-only.",
-                    exit_code=1,
-                )
 
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     manifest = build_manifest(
@@ -118,12 +271,27 @@ def run_generate(config: GenerateConfig, echo: Echo = print) -> list[RenderedDoc
                 f"{item.document.id}  {item.document.filename}  "
                 f"sha256={item.content_sha256}"
             )
+        if want_azure:
+            echo("dry-run: no blobs uploaded")
         return rendered
+
+    if want_azure and store is None:
+        store = open_blob_store(
+            env, container=config.container, account_url=config.account_url
+        )
 
     if want_local:
         write_local(config.out, rendered, manifest, echo)
     if want_azure:
-        echo("skipping Azure blob upload")
+        if store is None:
+            raise TalosError("Blob store is not configured", exit_code=1)
+        upload_blobs(
+            store,
+            rendered,
+            force=config.force,
+            local_dir=config.out if want_local else None,
+            echo=echo,
+        )
 
     return rendered
 

@@ -34,6 +34,7 @@ uv run talos deploy --help
 | Command | What it does |
 | --- | --- |
 | `uv run talos generate --local-only` | Render `corpus/facts.yaml` through Jinja templates into `data/credit-policies/` (12 Markdown files + `manifest.json`). Does not run the Search indexer. |
+| `uv run talos generate` | Dual-write: local files plus blob upload when Azure storage is configured (`AZURE_STORAGE_CONNECTION_STRING`, or `DefaultAzureCredential` + `AZURE_STORAGE_ACCOUNT_URL`). Unchanged blobs skip via metadata `content_sha256`. Does not run the Search indexer. |
 | `uv run talos deploy` | Idempotent Foundry IQ provision: knowledge source, generated indexer run, knowledge base, ARM MCP project connection, agent version. Fills missing env vars from `azd env get-values` unless `--no-azd`. |
 | `uv run talos deploy --wait` | Same, then poll indexer status until at least 12 documents succeed (CI default). |
 | `uv run talos deploy --dry-run` | Print the plan; no Azure calls. |

@@ -74,7 +74,7 @@ T1|x|init talos Click CLI deploy+test, CPython 3.14, plan docs, unit CLI tests, 
 T2|x|add talos generate local-only: facts.yaml, jinja templates, 12 MD + manifest, watermark, fact-key uniqueness|V2,V5,V28,I.cmd,I.file
 T3|x|add corpus contract tests + 18 golden queries yaml|V5,V19,V20,I.pytest,I.golden
 T4|x|add azd+Bicep storage Search Basic Foundry project-MI models RBAC canonical outputs location swedencentral|V6,V8,V9,V11,V16,V17,V21,V23,I.infra,I.env,I.names
-T5|.|extend generate dual-write blobs content_sha256 skip|V5,V22,V26,I.cmd
+T5|x|extend generate dual-write blobs content_sha256 skip|V5,V22,V26,I.cmd
 T6|.|prove live talos deploy --wait KS indexer KB extractiveData ARM MCP agent temperature=0 version_selector merge-patch|V4,V7,V12,V13,V14,V24,I.cmd,I.search,I.kb,I.arm,I.agent
 T7|.|add live pytest markers ingestion retrieval agent|V1,V3,V19,V20,I.pytest
 T8|.|add Teams Just-you runbook + teams marker skip unless E2E_TEAMS=1; sideload fallback|V16,V18,V20,I.agent
