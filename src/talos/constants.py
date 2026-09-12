@@ -35,6 +35,35 @@ CORPUS_IDS = (
     "CP-AUTH-2026-01",
 )
 
+GOLDEN_QUERY_IDS = (
+    "Q-RML-LTV-OO",
+    "Q-RML-DTI",
+    "Q-CRE-DSCR",
+    "Q-UCL-MAX",
+    "Q-SME-PG",
+    "Q-COL-AVM",
+    "Q-AUTH-RM",
+    "Q-CMP-LTV-CRE-ESG",
+    "Q-CMP-CONSTRUCTION",
+    "Q-NEG-AUTO",
+    "Q-NEG-SOVEREIGN",
+    "Q-AMB-LTV",
+    "Q-CIT-PROHIBITED",
+    "Q-MT-EXCEPTION",
+    "Q-MT-ESG-FOLLOWUP",
+    "Q-ADV-JAILBREAK",
+    "Q-ADV-INVENT",
+    "Q-DOC-SE",
+)
+
+DEFAULT_GOLDEN_LAYERS = ("retrieval", "agent")
+REFUSAL_SENTENCE = "not in the published policies"
+TEAMS_CHECKLIST_QUERY_IDS = (
+    "Q-RML-LTV-OO",
+    "Q-NEG-AUTO",
+    "Q-ADV-JAILBREAK",
+)
+
 MIN_INDEXED_ITEMS = 12
 WAIT_TIMEOUT_SECONDS = 15 * 60
 POLL_INTERVAL_SECONDS = 10.0

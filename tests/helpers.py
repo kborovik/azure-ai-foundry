@@ -1,0 +1,92 @@
+from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+from talos.env import repo_root
+from talos.generate import first_visible_line
+
+GOLDEN_RELATIVE = "tests/fixtures/golden_queries.yaml"
+FACTS_RELATIVE = "corpus/facts.yaml"
+MANIFEST_RELATIVE = "data/credit-policies/manifest.json"
+POLICIES_RELATIVE = "data/credit-policies"
+
+BANNED_BANK_NAMES = (
+    "JPMorgan",
+    "J.P. Morgan",
+    "Wells Fargo",
+    "Bank of America",
+    "HSBC",
+    "Barclays",
+    "Goldman Sachs",
+    "Citibank",
+    "Chase Bank",
+)
+
+__all__ = [
+    "BANNED_BANK_NAMES",
+    "FACTS_RELATIVE",
+    "GOLDEN_RELATIVE",
+    "MANIFEST_RELATIVE",
+    "POLICIES_RELATIVE",
+    "fact_value_cases",
+    "first_visible_line",
+    "load_facts",
+    "load_golden_queries",
+    "load_manifest",
+    "policies_dir",
+    "sha256_utf8",
+]
+
+
+def sha256_utf8(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def load_facts(root: Path | None = None) -> dict[str, Any]:
+    path = (root or repo_root()) / FACTS_RELATIVE
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise TypeError(f"{FACTS_RELATIVE} root must be a mapping")
+    return data
+
+
+def load_manifest(root: Path | None = None) -> dict[str, Any]:
+    path = (root or repo_root()) / MANIFEST_RELATIVE
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise TypeError(f"{MANIFEST_RELATIVE} root must be a mapping")
+    return data
+
+
+def load_golden_queries(root: Path | None = None) -> list[dict[str, Any]]:
+    path = (root or repo_root()) / GOLDEN_RELATIVE
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if isinstance(data, dict):
+        queries = data.get("queries", [])
+    else:
+        queries = data
+    if not isinstance(queries, list):
+        raise TypeError(f"{GOLDEN_RELATIVE} must be a list or a mapping with queries")
+    parsed: list[dict[str, Any]] = []
+    for item in queries:
+        if not isinstance(item, dict):
+            raise TypeError("each golden query must be a mapping")
+        parsed.append(item)
+    return parsed
+
+
+def policies_dir(root: Path | None = None) -> Path:
+    return (root or repo_root()) / POLICIES_RELATIVE
+
+
+def fact_value_cases(facts: dict[str, Any]) -> list[tuple[str, str, str, str]]:
+    cases: list[tuple[str, str, str, str]] = []
+    for doc in facts["documents"]:
+        for key, value in doc["facts"].items():
+            cases.append((doc["id"], doc["filename"], str(key), str(value)))
+    return cases
