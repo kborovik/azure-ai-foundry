@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from talos.env import missing_required, parse_azd_values, require_env
+from talos.constants import REQUIRED_ENV
+from talos.env import missing_required, parse_azd_values, require_env, resolve_env
 from talos.errors import TalosError
 
 pytestmark = pytest.mark.unit
@@ -39,3 +40,46 @@ def test_missing_required_reports_only_blank_names() -> None:
     missing = missing_required({"AZURE_SEARCH_ENDPOINT": "https://srch.example"})
     assert "AZURE_SEARCH_ENDPOINT" not in missing
     assert "AZURE_AI_PROJECT_ENDPOINT" in missing
+
+
+def test_resolve_env_fills_only_missing_from_azd(
+    clean_azure_env: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AZURE_AI_PROJECT_ENDPOINT", "https://already-set")
+    monkeypatch.setattr(
+        "talos.env.load_azd_env",
+        lambda: {
+            "AZURE_SEARCH_ENDPOINT": "https://from-azd.search.windows.net",
+            "AZURE_AI_PROJECT_ENDPOINT": "https://azd-must-not-win",
+        },
+    )
+    env = resolve_env(use_azd=True)
+    assert env["AZURE_SEARCH_ENDPOINT"] == "https://from-azd.search.windows.net"
+    assert env["AZURE_AI_PROJECT_ENDPOINT"] == "https://already-set"
+
+
+def test_resolve_env_no_azd_does_not_load(
+    clean_azure_env: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    called: list[bool] = []
+    monkeypatch.setattr(
+        "talos.env.load_azd_env",
+        lambda: (
+            called.append(True)
+            or {"AZURE_SEARCH_ENDPOINT": "https://from-azd.search.windows.net"}
+        ),
+    )
+    env = resolve_env(use_azd=False)
+    assert called == []
+    assert env.get("AZURE_SEARCH_ENDPOINT") != "https://from-azd.search.windows.net"
+
+
+def test_resolve_env_skips_azd_when_required_present(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name in REQUIRED_ENV:
+        monkeypatch.setenv(name, f"https://{name}.example")
+    called: list[bool] = []
+    monkeypatch.setattr("talos.env.load_azd_env", lambda: called.append(True) or {})
+    resolve_env(use_azd=True)
+    assert called == []

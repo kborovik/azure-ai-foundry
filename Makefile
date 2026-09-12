@@ -51,7 +51,7 @@ check: .venv ## Format check, lint, unit tests (no Azure)
 	$(call header,Running unit tests)
 	$(UV) run ruff format --check
 	$(UV) run ruff check
-	$(UV) run pytest
+	$(UV) run talos test
 
 generate: .venv ## Render corpus locally (no Azure)
 	$(call header,Generating credit policies)

@@ -70,7 +70,7 @@ Working tree must be clean, `CHANGELOG.md` `## Unreleased` must have bullets, an
 
 ## GitHub Actions
 
-- [`.github/workflows/test.yml`](.github/workflows/test.yml) — every push and pull request: `uv run pytest` (unit marker, CPython 3.14).
+- [`.github/workflows/test.yml`](.github/workflows/test.yml) — every push and pull request: `uv run talos test` (unit marker, CPython 3.14).
 - [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) — GitHub **release** `published` only (when `AZURE_CLIENT_ID` is set): OIDC login, `azd env select`, `uv run talos deploy --wait`, then live pytest markers.
 
 Create a GitHub environment `credit-policy-live` and repository variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZD_ENV_NAME`. Federate a user-assigned identity to that environment. Do not put secrets in git.

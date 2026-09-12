@@ -1020,7 +1020,7 @@ testpaths = ["tests"]
 timeout = 180
 ```
 
-Default `uv run pytest` (and `uv run talos test`) inherit `addopts = "-m unit"`. Live: `uv run pytest -m "ingestion or retrieval or agent" --override-ini addopts=` (or `uv run talos test` with the same args). CI PRs: `uv run pytest` is enough.
+Default `uv run pytest` (and `uv run talos test`) inherit `addopts = "-m unit"`. Live: `uv run pytest -m "ingestion or retrieval or agent" --override-ini addopts=` (or `uv run talos test` with the same args). CI PRs: `uv run talos test`.
 
 ### Fixtures (`tests/conftest.py`)
 
