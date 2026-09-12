@@ -1,4 +1,4 @@
-# Bank Credit Policy Agent Demo — Azure AI Foundry + Microsoft Teams
+# Bank Credit Policy Agent Demo — Microsoft Foundry + Microsoft Teams
 
 | Field | Value |
 | --- | --- |
@@ -13,9 +13,9 @@
 
 ## Overview
 
-Relationship managers and credit officers need a fast, cited answer to questions like “what is max LTV on an investment property?” during a live deal conversation. Today that means paging through policy PDFs. This demo shows a **prompt-based Microsoft Foundry agent** grounded on a **Foundry IQ knowledge base** whose source of truth is a small, synthetic corpus of bank credit-policy documents stored in **Azure Blob Storage**, with the same files dual-written locally so a presenter can open them. End users chat with the agent in **Microsoft Teams 1:1**.
+Relationship managers and credit officers need a fast, cited answer to questions like “what is max LTV on an investment property?” during a live deal conversation. Today that means paging through policy PDFs. This demo shows a **Foundry Agent Service prompt agent** grounded on a **Foundry IQ knowledge base** whose source of truth is a small, synthetic corpus of bank credit-policy documents stored in **Azure Blob Storage**, with the same files dual-written locally so a presenter can open them. End users chat with the agent in **Microsoft Teams 1:1**.
 
-The implementation is deliberately thin: a `uv` PEP 723 script generates the corpus; Bicep/`azd` provisions Storage, Azure AI Search (Basic), and a Foundry project with chat + embedding deployments; a second script creates the blob knowledge source, knowledge base, project MCP connection, and agent; pytest layers 1–4 cover corpus → ingestion → retrieval → agent without requiring a Teams tenant. Teams is a publish step, not a custom Bot Framework host.
+The implementation is deliberately thin: a `uv` PEP 723 script generates the corpus; Bicep/`azd` provisions Storage, Azure AI Search (Basic), and a Microsoft Foundry project with chat + embedding deployments; a second script creates the blob knowledge source, knowledge base, project MCP connection, and agent; pytest layers 1–4 cover corpus → ingestion → retrieval → agent without requiring a Teams tenant. Teams is a Foundry Agent Service publish step, not a custom Microsoft 365 Agents SDK host.
 
 ---
 
@@ -36,7 +36,26 @@ This repository is empty. There is no existing agent, corpus, or infrastructure.
 - **Foundry IQ** is the managed knowledge layer: a knowledge base groups knowledge sources and runs **agentic retrieval** (query planning, parallel search, semantic rerank, citations). Azure AI Search underpins it. See [What is Foundry IQ?](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/what-is-foundry-iq).
 - Creating a **blob knowledge source** auto-generates a data source, skillset, index, and indexer. Supported blob formats include Markdown and PDF. See [Create a blob knowledge source](https://learn.microsoft.com/en-us/azure/search/agentic-knowledge-source-how-to-blob).
 - The current recommended agent attach path is **MCP**: register the knowledge base MCP endpoint as a Foundry **project connection** (`RemoteTool` + `ProjectManagedIdentity`) and add an `MCPTool` with `allowed_tools: ["knowledge_base_retrieve"]`. See [Connect agents to Foundry IQ](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/foundry-iq-connect) and the [private retrieval tutorial](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/foundry-iq-tutorial-private-retrieval).
-- **Teams publishing** is GA: Foundry portal **Publish → Teams and Microsoft 365 Copilot**, or REST. Scopes: **Just you** (`BotServiceRbac`, no admin) vs **People in your organization** (`BotServiceTenant`, admin approval). Sideload via downloaded manifest ZIP is the fallback. See [Publish to Copilot and Teams](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/publish-copilot).
+- **Teams publishing** is GA: Microsoft Foundry portal **Publish → Teams and Microsoft 365 Copilot**, or REST. Scopes: **Just you** (`BotServiceRbac`, no admin) vs **People in your organization** (`BotServiceTenant`, admin approval). Sideload via downloaded manifest ZIP is the fallback. See [Publish to Copilot and Teams](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/publish-copilot).
+
+### 2026 product names
+
+Brands below follow Microsoft Learn as of 2026-09. ARM types, REST/SDK identifiers, and RBAC **role display names** are unchanged where Microsoft still ships them under the old string.
+
+| Say (2026) | Retired / do not use | Keep in ARM, REST, SDK, RBAC |
+| --- | --- | --- |
+| **Microsoft Foundry** (portal at [ai.azure.com](https://ai.azure.com)) | Azure AI Foundry, Azure AI Studio | `Microsoft.CognitiveServices/accounts`, `kind: AIServices` |
+| **Foundry resource** + **Foundry project** | Foundry hub, standalone Azure OpenAI resource | account name `aif-cp-*`; env `AZURE_AI_*` |
+| **Foundry Agent Service** (**prompt agent**) | Assistants API; custom Bot Framework host | `api-version=v1`, Responses API, `PromptAgentDefinition` |
+| **Foundry IQ** | “On Your Data”, hand-rolled RAG | knowledge bases / sources on **Azure AI Search** |
+| **Foundry Models** (Azure OpenAI in Foundry Models) | Azure OpenAI Service as a separate studio | REST `azureOpenAIParameters`, SDK `AzureOpenAI*`, deployment `format: OpenAI` |
+| **Azure AI Search** | Azure Cognitive Search | `Microsoft.Search` |
+| **Azure AI Bot Service** (**Azure Bot** resource) | Azure Bot Service (short name) | `Microsoft.BotService`; role **Azure Bot Service Contributor** |
+| **Microsoft 365 Agents SDK** | Bot Framework SDK (legacy conversational host) | — |
+| **Foundry User**, **Foundry Project Manager** | Azure AI User, Azure AI Project Manager | role IDs unchanged |
+| **Cognitive Services User** | — (name not retired) | still the role for Search MI → Foundry Models inference |
+| **Microsoft Entra ID** | Azure AD | `DefaultAzureCredential` |
+| **Foundry Tools** | Azure AI Services / Cognitive Services (brand) | not used as a demo resource; ARM provider is still Cognitive Services |
 
 ---
 
@@ -46,16 +65,16 @@ This repository is empty. There is no existing agent, corpus, or infrastructure.
 
 1. Generate **12 synthetic credit-policy Markdown documents** with unique, quotable facts; dual-write to `data/credit-policies/` and Azure Blob container `credit-policies`.
 2. Ingest those blobs into a Foundry IQ knowledge base (`ks-credit-policies` → `kb-credit-policies`).
-3. Ship a prompt-based Foundry agent (`credit-policy-agent`) that answers **only** from retrieved policy, with citations in the Learn glyph format (`【message_idx:search_idx†source_name】`) asserting filename / blob URL / `policy_id`, not invented section titles.
+3. Ship a Foundry Agent Service **prompt agent** (`credit-policy-agent`) that answers **only** from retrieved policy, with citations in the Learn glyph format (`【message_idx:search_idx†source_name】`) asserting filename / blob URL / `policy_id`, not invented section titles.
 4. Publish the agent to Microsoft Teams as a 1:1 chat for the presenter (**Just you** scope).
 5. Provide a golden-query catalog of **18** queries and a layered pytest e2e framework.
-6. Provision demo-scale Azure resources via `azd` + Bicep, keyless (Entra ID / managed identity).
+6. Provision demo-scale Azure resources via `azd` + Bicep, keyless (Microsoft Entra ID / managed identity).
 
 ### Non-goals
 
 - Real bank IP, real borrower PII, or production credit decisioning.
-- Custom Adaptive Cards, streaming proxies, or a self-hosted Bot Framework adapter. (Hosted agents + M365 Agents SDK are an **alternative**, not v1.)
-- Document-level ACLs / Purview labels (corpus is public-to-the-demo).
+- Custom Adaptive Cards, streaming proxies, or a self-hosted Microsoft 365 Agents SDK adapter. (Foundry **hosted agents** + Microsoft 365 Agents SDK are an **alternative**, not v1.)
+- Document-level ACLs / Microsoft Purview labels (corpus is public-to-the-demo).
 - PDF generation in v1 (see Key Decisions).
 - Multi-agent workflows, origination tools, or write-back to core banking.
 - Production networking (Private Link, CMK). Public network access stays enabled for the demo.
@@ -67,14 +86,14 @@ This repository is empty. There is no existing agent, corpus, or infrastructure.
 
 | # | Decision | Rationale |
 | --- | --- | --- |
-| K1 | **Prompt-based Foundry Agent + Foundry IQ + portal/REST publish to Teams** | Least moving parts. Hosted agents are only needed for custom Python, Adaptive Cards, or Invocations. When published to Teams, Responses protocol powers agent logic and the platform bridges to Activity protocol. |
+| K1 | **Foundry Agent Service prompt agent + Foundry IQ + portal/REST publish to Teams** | Least moving parts. Hosted agents are only needed for custom Python, Adaptive Cards, or Invocations. When published to Teams, Responses protocol powers agent logic and Azure AI Bot Service bridges to Activity protocol. |
 | K2 | **Attach KB via MCP project connection**, tool `knowledge_base_retrieve` | Current documented path (2026-08-01-preview MCP URL, `RemoteTool` + `ProjectManagedIdentity`). Not a native “knowledge” tool on the agent and not a custom MCP server we host. |
 | K3 | **Markdown-only corpus** (no PDF in v1) | Blob indexer natively extracts Markdown. MD is git-diffable for presenters. PDF (WeasyPrint/Playwright) adds system libraries and CI fragility with no retrieval gain for text-only policies. Revisit if a stakeholder insists on “official PDF” optics. |
-| K4 | **Azure AI Search SKU = Basic**, not Free | Portal agentic-retrieval quickstart requires Basic+ for **managed identity**. Free has no MI ([try-for-free](https://learn.microsoft.com/en-us/azure/search/search-try-for-free), [managed identities](https://learn.microsoft.com/en-us/azure/search/search-how-to-managed-identities) = Basic+). Blob KS uses the ResourceId connection string, which needs Search MI → Storage Blob Data Reader and Cognitive Services User. Basic also gives dedicated 15 GB. Semantic ranker on Free is documented inconsistently (SKU table vs try-for-free); **do not use ranker as the Basic justification**. Free *does* support agentic retrieval in some regions (region-table footnote 1), but MI is blocking. |
+| K4 | **Azure AI Search SKU = Basic**, not Free | Portal agentic-retrieval quickstart requires Basic+ for **managed identity**. Free has no MI ([try-for-free](https://learn.microsoft.com/en-us/azure/search/search-try-for-free), [managed identities](https://learn.microsoft.com/en-us/azure/search/search-how-to-managed-identities) = Basic+). Blob KS uses the ResourceId connection string, which needs Search MI → Storage Blob Data Reader and **Cognitive Services User** (RBAC display name unchanged; Foundry Models inference on the Foundry resource). Basic also gives dedicated 15 GB. Semantic ranker on Free is documented inconsistently (SKU table vs try-for-free); **do not use ranker as the Basic justification**. Free *does* support agentic retrieval in some regions (region-table footnote 1), but MI is blocking. |
 | K5 | **Search REST `2026-08-01-preview`** for KS/KB create + retrieve | GA `2026-04-01` is extractive + `intents` only — no query planning, no `messages` input. Cross-document and ambiguous queries need low-effort query planning. Portal still uses preview. Call this out as preview risk. |
 | K6 | **Models: `gpt-5-mini` (chat + KB planning) + `text-embedding-3-large`** | **Decided 2026-09-12.** Embedding is what the private-retrieval tutorial and blob KS samples use. `gpt-5-mini` is GA, listed for KB query planning, and in the portal-supported LLM list. `gpt-4.1-mini` still appears in some connect samples but is **deprecated** for KB models. Do **not** switch to `gpt-5.4-mini` in v1. |
 | K7 | **KB `outputMode: extractiveData`, `retrievalReasoningEffort.kind: low`** | FAQ: for Foundry IQ + agents, return extractive data so the agent reasons; reserve answer synthesis for standalone retrieve-to-user apps. `low` enables query planning (up to 3 sources / 3 subqueries) without medium-effort latency. Tests that need determinism can override to `minimal` on the retrieve request. |
-| K8 | **Infra via `azd` + Bicep**; knowledge objects via Python, not Bicep | Storage/Search/Foundry/RBAC/deployments are ARM-native. Knowledge sources, knowledge bases, project connections, and agents are data-plane (Search REST + Foundry Agents v1 + ARM connections). A post-provision script is the supported pattern (see Foundry IQ hosted-agent quickstart `provision_kb.py`). |
+| K8 | **Infra via `azd` + Bicep**; knowledge objects via Python, not Bicep | Storage/Search/Foundry/RBAC/deployments are ARM-native. Knowledge sources, knowledge bases, project connections, and agents are data-plane (Search REST + Foundry Agent Service `api-version=v1` + ARM connections). A post-provision script is the supported pattern (see Foundry IQ hosted-agent quickstart `provision_kb.py`). |
 | K9 | **Default CI = corpus contract tests only**; live Azure behind pytest markers | No Teams tenant in CI. Layers 2–4 require `az login` + deployed env. Layer 5 (`teams`) is opt-in `E2E_TEAMS=1`. |
 | K10 | **Synthetic watermark on every document** | `SYNTHETIC — DEMO ONLY` as the first visible line. Prevents anyone treating numbers as real policy. |
 | K11 | **CPython 3.14 is the default interpreter** | Final product decision. Operator host has `/opt/homebrew/opt/python@3.14`. Pin with `uv python pin 3.14` (commits `.python-version`). Every PEP 723 script and `pyproject.toml` uses `requires-python = ">=3.14"`. `[tool.uv] python-preference = "managed"` so `uv run` downloads 3.14 if the host interpreter is missing. The shebang `#!/usr/bin/env -S uv run --script` honors that pin. Generator, provisioner, and pytest all run on 3.14. **Do not document 3.12 as the default.** |
@@ -83,7 +102,7 @@ This repository is empty. There is no existing agent, corpus, or infrastructure.
 | K14 | **Pin `azure-search-documents==12.1.0b2`** and pass `api_version="2026-08-01-preview"` | Stable `12.0.0` defaults to GA `2026-04-01` (no `messages`, no query planning). Preview `12.1.0b2` (2026-08-28) binds `2026-08-01-preview`. Do not use `>=11.6.0`. |
 | K15 | **On-demand indexer run after each blob upload**; no `ingestionSchedule` in v1 | Blob KS `ingestionSchedule` is omitted/`null`. Status is a poll surface, not a trigger. After KS create-or-update, and on later generator runs, `POST` run the generated indexer (`createdResources.indexer` from KS GET) then re-poll status. Blob last-modified change detection applies only when that indexer actually runs. Do not edit generated indexer JSON. |
 | K16 | **Citation identifier = blob filename / original blob URL / `policy_id`**; `PromptAgentDefinition.temperature=0` | Connect docs require `【message_idx:search_idx†source_name】`; blob KS citation URLs are the original document URL. Generated indexes are not hand-edited, so Markdown section headings are not a promised payload. Temperature is a documented field on `PromptAgentDefinition`; set `0`. `gpt-5-mini` may ignore it — substring assertions still apply. |
-| K17 | **Local auth keys allowed; do not set `disableLocalAuth: true`** | **Decided 2026-09-12.** Keys may exist on the resource for support/demo; they are **never committed**. Entra ID / `DefaultAzureCredential` remains the operator path. |
+| K17 | **Local auth keys allowed; do not set `disableLocalAuth: true`** | **Decided 2026-09-12.** Keys may exist on the resource for support/demo; they are **never committed**. Microsoft Entra ID / `DefaultAzureCredential` remains the operator path. |
 | K18 | **This tenant allows custom Teams app sideload** | **Decided 2026-09-12.** Direct publish **Just you** is still the happy path. Sideload of the downloaded manifest ZIP is an **official in-scope fallback**, not a maybe. |
 | K19 | **Search Index Data Reader on the Foundry project MI** (MCP connection) | **Decided 2026-09-12.** The MCP `ProjectManagedIdentity` connection authenticates as the **project** system-assigned MI. Checklist 3b remains: if Teams 403s after playground works, **also** assign Search Index Data Reader to the agent instance identity. |
 | K20 | **No Application Insights in v1 Bicep** | **Decided 2026-09-12.** Skip App Insights / extra tracing resources. Use Foundry playground debug and Search retrieve `includeActivity`. |
@@ -110,8 +129,8 @@ This repository is empty. There is no existing agent, corpus, or infrastructure.
 ```mermaid
 sequenceDiagram
   participant U as Microsoft Teams
-  participant BOT as Azure Bot Service
-  participant A as Azure AI Foundry
+  participant BOT as Azure AI Bot Service
+  participant A as Microsoft Foundry
   participant SEARCH as Azure AI Search
 
   U->>BOT: 1:1 chat
@@ -153,7 +172,7 @@ flowchart TD
 | Corpus facts | `corpus/facts.yaml` | Unique testable numbers, committee names, dates. Generator and contract tests share this file. |
 | Templates | `corpus/templates/*.md.j2` | Jinja2 Markdown with watermark header and numbered sections. |
 | Generator | `scripts/generate_credit_policies.py` | Render, write local, upload blobs (metadata `content_sha256`), write manifest. Does **not** run the Search indexer. |
-| Infra | `infra/*.bicep`, `azure.yaml` | RG, storage, search, Foundry account+**project with SystemAssigned MI**, model deployments, RBAC. |
+| Infra | `infra/*.bicep`, `azure.yaml` | RG, storage, search, Foundry resource+**project with SystemAssigned MI**, model deployments, RBAC. |
 | Foundry IQ provisioner | `scripts/provision_foundry_iq.py` | PEP 723 uv script. Create/update KS, **run generated indexer**, poll status, create KB, ARM project connection, create agent version, pin `version_selector`. |
 | Agent instructions | `agents/credit-policy-agent.instructions.md` | Loaded by provisioner into `PromptAgentDefinition.instructions`. |
 | Query catalog | `tests/fixtures/golden_queries.yaml` | E2E assertions. |
@@ -172,9 +191,9 @@ Use a unique suffix from `azd` (`${AZURE_ENV_NAME}${resourceToken}`) for globall
 | Blob container | `credit-policies` |
 | Search service | `srch-cp-${resourceToken}` |
 | Search SKU | `basic` |
-| Foundry account | `aif-cp-${resourceToken}` (kind `AIServices`, SKU `S0`, `allowProjectManagement: true`) |
+| Foundry resource | `aif-cp-${resourceToken}` (`Microsoft.CognitiveServices/accounts`, kind `AIServices`, SKU `S0`, `allowProjectManagement: true`) |
 | Foundry project | `credit-policy-demo` |
-| Chat deployment | `gpt-5-mini` (model `gpt-5-mini`, version `2025-08-07` or latest GA in-region). `sku: { name: 'GlobalStandard', capacity: 50 }` → **50,000 TPM**. Azure OpenAI/Foundry `sku.capacity` **1 = 1,000 TPM** ([working with models](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/working-with-models)). Parameterize `chatCapacity`; do not set `50000` (that would be 50M TPM and exhaust quota) and do not treat `50` as “50 TPM”. |
+| Chat deployment | `gpt-5-mini` (model `gpt-5-mini`, version `2025-08-07` or latest GA in-region). `sku: { name: 'GlobalStandard', capacity: 50 }` → **50,000 TPM**. Foundry Models `sku.capacity` **1 = 1,000 TPM** ([working with models](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/working-with-models)). Parameterize `chatCapacity`; do not set `50000` (that would be 50M TPM and exhaust quota) and do not treat `50` as “50 TPM”. |
 | Embedding deployment | `text-embedding-3-large` (model `text-embedding-3-large`, version `1`). Same `sku.capacity` convention; default `capacity: 20` (20k TPM) is enough for 12 docs. |
 | Knowledge source | `ks-credit-policies` |
 | Knowledge base | `kb-credit-policies` |
@@ -191,7 +210,7 @@ Use a unique suffix from `azd` (`${AZURE_ENV_NAME}${resourceToken}`) for globall
 | `francecentral` | Yes (footnote 1 only) | Yes | Yes (Europe GS) | Yes | Europe backup |
 | `canadaeast` | Yes | Yes | Yes (Americas GS) | Yes | Americas backup. No Search **AI enrichment** column; this demo uses identity-based Foundry embeddings, not built-in enrichment. |
 | `centralus` | Yes | Yes | Yes (Americas GS) | Yes | Americas backup |
-| `westus2` | Yes (footnote 3 = no Purview indexer labels) | Yes | **No** — not in Americas GS columns | Yes (other Foundry models table) | **Do not use** as a single-region demo location |
+| `westus2` | Yes (footnote 3 = no Microsoft Purview indexer labels) | Yes | **No** — not in Americas GS columns | Yes (other Foundry models table) | **Do not use** as a single-region demo location |
 | `eastus` / `eastus2` / `westus` / `westus3` | **No** — footnote 2: “prevents the creation of new search services” | Yes | Yes (where listed) | Yes | **Do not use for new Search services** |
 
 Preflight: if Search create returns `InsufficientResourcesAvailable` / capacity error, retry `uksouth`, `francecentral`, `canadaeast`, `centralus`. Do not retry `eastus2` or `westus2`.
@@ -278,7 +297,7 @@ uv run pytest -m "unit" tests/
 uv run pytest -m "ingestion or retrieval or agent" tests/
 ```
 
-Then in Foundry portal: playground smoke, then **Publish → Teams and Microsoft 365 Copilot → Direct publish → Just you**.
+Then in the Microsoft Foundry portal: playground smoke, then **Publish → Teams and Microsoft 365 Copilot → Direct publish → Just you**.
 
 ### Env contract (canonical names)
 
@@ -293,7 +312,7 @@ Bicep outputs and pytest fixtures use **exactly** these names. Do not also read 
 | `AZURE_SEARCH_ENDPOINT` | Bicep: `https://{search}.search.windows.net` | provisioner, retrieval tests |
 | `AZURE_AI_PROJECT_ENDPOINT` | Bicep: `https://{account}.services.ai.azure.com/api/projects/{project}` | provisioner, agent tests |
 | `AZURE_AI_PROJECT_RESOURCE_ID` | Bicep ARM id of the **project** | ARM connection PUT |
-| `AZURE_AI_SERVICES_ENDPOINT` | Bicep: the AIServices endpoint Search accepts as `azureOpenAIParameters.resourceUri`. Confirm in-region; do **not** assume `.openai.azure.com`. Often `https://{customSubDomain}.cognitiveservices.azure.com` or `https://{customSubDomain}.services.ai.azure.com` or `https://{customSubDomain}.openai.azure.com`. | KS/KB model `resourceUri` |
+| `AZURE_AI_SERVICES_ENDPOINT` | Bicep: the Foundry resource endpoint Search accepts as `azureOpenAIParameters.resourceUri` (REST field name is unchanged). Confirm in-region; do **not** assume `.openai.azure.com`. Prefer `https://{customSubDomain}.services.ai.azure.com`; older resources may still be `https://{customSubDomain}.cognitiveservices.azure.com` or `https://{customSubDomain}.openai.azure.com`. | KS/KB model `resourceUri` |
 | `AZURE_AI_PROJECT_PRINCIPAL_ID` | Bicep: project **SystemAssigned** `principalId` | docs / debug; RBAC is in Bicep |
 
 Optional: `AZURE_STORAGE_CONNECTION_STRING` for local generator only; never committed.
@@ -507,7 +526,7 @@ Assert on `result.response[*].content[*].text` and `result.references`. Blob KS 
 
 `project_resource_id` shape: `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.CognitiveServices/accounts/{aif}/projects/credit-policy-demo`.
 
-### 4. Prompt agent (Foundry Agents `api-version=v1`)
+### 4. Prompt agent (Foundry Agent Service `api-version=v1`)
 
 Python (`azure-ai-projects>=2.0.0,<3`; current 2.x is **2.6.0** as of 2026-09-04):
 
@@ -560,13 +579,13 @@ Token scope for Foundry data plane: `https://ai.azure.com/.default`.
 
 Portal (demo default):
 
-1. Foundry (new) → agent `credit-policy-agent` → confirm **Active version**.
+1. Microsoft Foundry portal → agent `credit-policy-agent` → confirm **Active version**.
 2. **Publish → Teams and Microsoft 365 Copilot**.
 3. Metadata: Name `Credit Policy Assistant (Demo)`, short description, developer `Contoso Demo Bank`.
 4. **Direct publish → Just you**.
-5. Azure Bot Service is auto-created (needs `Microsoft.BotService` RP and **Azure Bot Service Contributor** on the RG — Foundry roles do **not** grant this).
+5. An **Azure Bot** resource (Azure AI Bot Service) is auto-created (needs `Microsoft.BotService` RP and **Azure Bot Service Contributor** on the RG — Foundry roles do **not** grant this).
 
-REST equivalent is documented in [Publish via REST](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/publish-copilot-virtual-network): create Bot Service, enable Activity protocol + `BotServiceRbac`, call Foundry Microsoft 365 publish API. Portal is sufficient for v1; automate in a later PR if needed.
+REST equivalent is documented in [Publish via REST](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/publish-copilot-virtual-network): create the Azure Bot, enable Activity protocol + `BotServiceRbac`, call the Foundry Microsoft 365 publish API. Portal is sufficient for v1; automate in a later PR if needed.
 
 Sideload fallback (**in-scope**; this tenant **allows** custom app upload — K18): **Publish options → Download & customize → Download ZIP**, then Teams **Apps → Manage your apps → Upload an app → Upload a custom app**. Direct publish **Just you** remains the happy path.
 
@@ -574,8 +593,8 @@ Prerequisites for Teams:
 
 - Agent must have a unique identity (`agent.identity` is not null) — true for new Foundry agents.
 - Activity protocol enabled; `BotServiceRbac` (Just you) or `BotServiceTenant` (org).
-- Caller: **Foundry User** on the project; Bot write permissions on the RG.
-- M365 tenant that the presenter is signed into; **Just you** needs no admin approval.
+- Caller: **Foundry User** on the project; Azure Bot write permissions on the RG.
+- Microsoft 365 tenant that the presenter is signed into; **Just you** needs no admin approval.
 
 ### 6. Python packages (current names)
 
@@ -1084,7 +1103,7 @@ Default **skip**. Enable with env `E2E_TEAMS=1`.
 Automated options (pick one if implementing; otherwise skip and use checklist):
 
 - **Not recommended for v1:** Direct Line — publish flow may not enable Direct Line.
-- **Possible:** call the agent **Activity protocol** endpoint with a Bot Service token. This is fragile in CI.
+- **Possible:** call the agent **Activity protocol** endpoint with an Azure AI Bot Service token. This is fragile in CI.
 - **Practical:** keep automated coverage on layer 4 (same Responses engine that Teams bridges to). Document that Teams is a channel, not a second brain.
 
 `tests/test_teams.py` (PR8): if `E2E_TEAMS != "1"`, `pytest.skip`. If the flag is set and no Activity client exists, **skip with a message pointing at the checklist** — do **not** `pytest.fail()`. Checklist queries only: `Q-RML-LTV-OO`, `Q-NEG-AUTO`, `Q-ADV-JAILBREAK`.
@@ -1108,7 +1127,7 @@ Automated options (pick one if implementing; otherwise skip and use checklist):
 
 - Setup: `astral-sh/setup-uv` then `uv python pin 3.14` / `uv python install 3.14` (do not use `actions/setup-python` with 3.12).
 - PR: `uv run pytest` (inherits `addopts = "-m unit"`, CPython 3.14)
-- `workflow_dispatch` / nightly (optional): GitHub environment `credit-policy-live`; federated credential on a user-assigned identity with Operator roles **minus** Azure Bot Service Contributor; secrets/vars: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZD_ENV_NAME=credit-policy-demo`. Then `azd env select` + live pytest with addopts overridden.
+- `workflow_dispatch` / nightly (optional): GitHub environment `credit-policy-live`; federated credential on a user-assigned identity with Operator roles **minus** Azure Bot Service Contributor (RBAC display name unchanged); secrets/vars: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZD_ENV_NAME=credit-policy-demo`. Then `azd env select` + live pytest with addopts overridden.
 
 Cassettes (optional later): `pytest-recording` for retrieve JSON. Agent answers drift — do not cassette layer 4 as the primary gate.
 
@@ -1192,16 +1211,16 @@ Cassettes (optional later): `pytest-recording` for retrieve JSON. Agent answers 
 
 ## Alternatives Considered
 
-### A1. Custom Bot Framework / M365 Agents SDK host vs Foundry publish
+### A1. Custom Microsoft 365 Agents SDK host vs Foundry Agent Service publish
 
 | | Prompt agent + publish | Custom host |
 | --- | --- | --- |
 | Teams wiring | Platform bridges Responses → Activity | You own adapter, auth, hosting |
 | Adaptive Cards / custom streaming | Limited | Full control |
 | Demo time-to-green | Hours | Days |
-| Failure mode | Publish RBAC / Bot RP | Entire extra service |
+| Failure mode | Publish RBAC / `Microsoft.BotService` RP | Entire extra service |
 
-**Choice:** Foundry publish. Revisit hosted agents if the demo needs custom cards.
+**Choice:** Foundry Agent Service publish. Revisit hosted agents if the demo needs custom cards.
 
 ### A2. Hosted agent + Toolbox MCP vs prompt agent + project MCP connection
 
@@ -1243,7 +1262,7 @@ Synthesis in the KB produces a finished answer (tutorial playground). FAQ recomm
 | --- | --- | --- |
 | Model invents LTV/DTI | **High** (demo-killing) | Mandatory KB tool; refuse if empty; e2e negative + adversarial queries |
 | Jailbreak / “ignore policy” | **High** | Instructions + `Q-ADV-*` tests |
-| Secrets in git | **High** | No connection strings committed. **K17:** do not set `disableLocalAuth: true`; keys may exist on the resource but never in git. Operator uses Entra ID. |
+| Secrets in git | **High** | No connection strings committed. **K17:** do not set `disableLocalAuth: true`; keys may exist on the resource but never in git. Operator uses Microsoft Entra ID. |
 | Treating synthetic policy as real | **Medium** | Watermark; agent discloses synthetic when asked |
 | PII in traces | **Medium** | Instructions forbid echoing PII; do not log document bodies or user prompts at INFO in our scripts (log query ids only) |
 | Over-sharing in Teams | **Medium** | Publish **Just you**; org-wide needs admin + BotServiceTenant |
@@ -1254,13 +1273,13 @@ Synthesis in the KB produces a finished answer (tutorial playground). FAQ recomm
 
 | Identity | Roles |
 | --- | --- |
-| Operator (user) | RG Contributor; Storage Blob Data Contributor; Search Service Contributor; Search Index Data Contributor; Foundry Project Manager; Foundry User; Azure Bot Service Contributor (for publish) |
-| Search system-assigned MI | Storage Blob Data Reader on storage; Cognitive Services User on Foundry account |
-| Foundry **project** system-assigned MI (`AZURE_AI_PROJECT_PRINCIPAL_ID`) | Search Index Data Reader on search. This is **not** the Cognitive Services **account** MI. Bicep must set `identity: { type: 'SystemAssigned' }` on `Microsoft.CognitiveServices/accounts/projects`. |
+| Operator (user) | RG Contributor; Storage Blob Data Contributor; Search Service Contributor; Search Index Data Contributor; Foundry Project Manager; Foundry User; **Azure Bot Service Contributor** (RBAC display name; needed to create the Azure Bot on publish) |
+| Search system-assigned MI | Storage Blob Data Reader on storage; **Cognitive Services User** on the Foundry resource (role name unchanged; Foundry Models inference) |
+| Foundry **project** system-assigned MI (`AZURE_AI_PROJECT_PRINCIPAL_ID`) | Search Index Data Reader on search. This is **not** the Foundry **resource** (`Microsoft.CognitiveServices/accounts`) MI. Bicep must set `identity: { type: 'SystemAssigned' }` on `Microsoft.CognitiveServices/accounts/projects`. |
 | Agent instance identity (post-publish) | **K19:** MCP uses **project MI**. If Teams 403 after playground works: **also** assign Search Index Data Reader to `agent.instance_identity` (checklist 3b). |
 | Teams “Just you” callers | BotServiceRbac: identities that can call the agent in Foundry |
 
-Register `Microsoft.BotService` before publish: `az provider register --namespace Microsoft.BotService`.
+Register the Azure AI Bot Service provider before publish: `az provider register --namespace Microsoft.BotService`.
 
 ### Content safety
 
@@ -1283,7 +1302,7 @@ Enable the default Foundry content filter on `gpt-5-mini`. Do not disable jailbr
 | Retrieve | `includeActivity: true` | modelQueryPlanning tokens, azureBlob subquery text, elapsedMs |
 | Agent | Responses payload + Foundry playground | tool calls, citations |
 | Latency | pytest logs `elapsed_ms` per query | compare to 8–20 s SLO |
-| Teams | Bot Service channel health; Foundry publish dialog | 403 on Bot write, missing Activity protocol |
+| Teams | Azure AI Bot Service channel health; Foundry publish dialog | 403 on Azure Bot write, missing Activity protocol |
 
 Alerting is out of scope for the demo. For a live walkthrough, the presenter watches playground debug / Search activity JSON. **K20:** do not add Application Insights or diagnostic settings to v1 Bicep.
 
@@ -1296,7 +1315,7 @@ Alerting is out of scope for the demo. For a live walkthrough, the presenter wat
 3. **PR5** generate + provision IQ; playground query `Q-RML-LTV-OO`.
 4. **PR6** live pytest markers locally.
 5. **Publish Just you**; run Teams checklist.
-6. If a wider audience is needed: republish **People in your organization** and wait for M365 admin approval.
+6. If a wider audience is needed: republish **People in your organization** and wait for Microsoft 365 admin approval.
 
 Feature flags: none. Environment is the flag (`local-only` vs live Azure vs `E2E_TEAMS`).
 
@@ -1321,8 +1340,8 @@ Rollback:
 | First indexer run incomplete → empty retrieve | **Medium** | Provisioner polls KS status; tests skip with message if processed < 12 |
 | Agent does not call MCP tool | **High** | Strong instructions; `allowed_tools` only retrieve; e2e fails on invented numbers |
 | Direct publish fails | **Low** | **K18:** sideload ZIP is allowed in this tenant (official fallback) |
-| Double billing (Search retrieval tokens + OpenAI plan + agent) | **Low** | Demo volume tiny; stay on Search free retrieval allowance until exhausted then Basic standard plan |
-| Foundry RBAC rename (Azure AI User → Foundry User) | **Low** | Use current names; role IDs unchanged |
+| Double billing (Search retrieval tokens + Foundry Models plan + agent) | **Low** | Demo volume tiny; stay on Search free retrieval allowance until exhausted then Basic standard plan |
+| Foundry RBAC rename (Azure AI User → Foundry User) | **Low** | Use 2026 names (**Foundry User**, **Foundry Project Manager**); role IDs unchanged |
 
 ---
 
@@ -1351,14 +1370,14 @@ Do not put agent code as an `azd` service in v1 (no hosted container).
 
 1. `Microsoft.Storage/storageAccounts` — Standard_LRS, TLS1.2, blob public access **disabled**, versioning optional. Container `credit-policies` via `blobServices/containers`.
 2. `Microsoft.Search/searchServices` — SKU `basic`, replica 1, partition 1, system-assigned identity, `partitionCount: 1`. Semantic search / knowledge retrieval: enable the **free** agentic retrieval billing plan (default).
-3. `Microsoft.CognitiveServices/accounts@2025-06-01` (or `2026-05-15-preview` if needed) — `kind: AIServices`, `sku.name: S0`, `allowProjectManagement: true`, `customSubDomainName`, system-assigned identity, `publicNetworkAccess: Enabled`. **K17:** omit `disableLocalAuth` or set `false` (keys allowed, never committed). **K20:** do not create an Application Insights resource.
+3. `Microsoft.CognitiveServices/accounts@2025-06-01` (or `2026-05-15-preview` if needed) — this **is** the Microsoft Foundry resource (`kind: AIServices`, `sku.name: S0`, `allowProjectManagement: true`, `customSubDomainName`, system-assigned identity, `publicNetworkAccess: Enabled`). ARM provider name is unchanged. **K17:** omit `disableLocalAuth` or set `false` (keys allowed, never committed). **K20:** do not create an Application Insights resource.
 4. `Microsoft.CognitiveServices/accounts/projects` — name `credit-policy-demo`, **`identity: { type: 'SystemAssigned' }`**. Official ARM samples often omit project identity; that is **not** sufficient for MCP `ProjectManagedIdentity`. Output `AZURE_AI_PROJECT_PRINCIPAL_ID`.
 5. Deployments on the account:
    - `gpt-5-mini` / format OpenAI / `sku: { name: 'GlobalStandard', capacity: 50 }` (50k TPM; 1 capacity = 1,000 TPM).
    - `text-embedding-3-large` / version `1` / `capacity: 20`.
 6. Role assignments (`Microsoft.Authorization/roleAssignments`):
    - Search MI → Storage Blob Data Reader (`2a2b9908-6ea1-4ae2-8e65-a410df84e7d1`)
-   - Search MI → Cognitive Services User (`a97b65f3-24c7-4388-baec-2e87135dc908`)
+   - Search MI → Cognitive Services User (`a97b65f3-24c7-4388-baec-2e87135dc908`) — RBAC display name unchanged; grants Foundry Models inference on the Foundry resource
    - **Project** MI (`project.identity.principalId`) → Search Index Data Reader (`1407120a-92aa-4202-b7e9-c0e197c71c8f`) — **not** the account MI
    - Deploying principal (from `azd`) → Storage Blob Data Contributor, Search Service Contributor, Search Index Data Contributor, Foundry User / Project Manager as required
 
@@ -1371,6 +1390,13 @@ Cost ballpark (demo, always-on): Search Basic ~ tens of USD/month; Foundry S0 + 
 ---
 
 ## References
+
+### Platform
+
+- [What is Microsoft Foundry?](https://learn.microsoft.com/en-us/azure/foundry/what-is-foundry) — 2026 brand (formerly Azure AI Foundry / Azure AI Studio); Foundry resource + projects
+- [Foundry Agent Service overview](https://learn.microsoft.com/en-us/azure/foundry/agents/overview) — prompt agents vs hosted agents; Responses API
+- [Foundry RBAC](https://learn.microsoft.com/en-us/azure/foundry/concepts/rbac-foundry) — **Foundry User** / **Foundry Project Manager** (formerly Azure AI User / Azure AI Project Manager)
+- [Azure AI Bot Service](https://learn.microsoft.com/en-us/azure/bot-service/?view=azure-bot-service-4.0) — Azure Bot resource; channel connector used by Foundry publish
 
 ### Foundry IQ and Search
 
@@ -1443,7 +1469,7 @@ Incremental, each PR independently reviewable and mergeable. No Azure required u
 
 ### PR 4 — Azure infra (azd + Bicep)
 
-- **Title:** `infra: azd/Bicep for storage, AI Search Basic, Foundry, models, RBAC`
+- **Title:** `infra: azd/Bicep for storage, Azure AI Search Basic, Microsoft Foundry, Foundry Models, RBAC`
 - **Files:** `azure.yaml` (`module: main`), `infra/main.bicep`, `infra/main.parameters.json`, `infra/modules/*`, `scripts/load_azd_env.fish`
 - **Depends on:** PR 1
 - **Description:** Provision demo RG. **Accept criteria:** `azd env set AZURE_LOCATION swedencentral` then `azd up`; Search Basic + `gpt-5-mini` GlobalStandard + `text-embedding-3-large` **Succeeded** in a **non-footnote-2** region that is also on the GS matrix. Project resource has SystemAssigned MI; `AZURE_AI_PROJECT_PRINCIPAL_ID` and `AZURE_AI_SERVICES_ENDPOINT` outputted. No knowledge source yet. Location preflight: do not use eastus2/westus3 (Search capacity) or westus2 (no GS `gpt-5-mini`). Backups: uksouth, francecentral, canadaeast, centralus.
@@ -1467,14 +1493,14 @@ Incremental, each PR independently reviewable and mergeable. No Azure required u
 - **Title:** `test: live ingestion, Foundry IQ retrieve, and agent e2e markers`
 - **Files:** `tests/test_ingestion.py`, `tests/test_retrieval.py`, `tests/test_agent.py`, Azure fixtures in `conftest.py`; optional OIDC job in `.github/workflows/test.yml`
 - **Depends on:** PR 3, PR 6
-- **Description:** Markers `ingestion`, `retrieval`, `agent`. Skip without canonical env. OIDC: GitHub env `credit-policy-live`; UAMI roles = Operator minus Bot Contributor; vars `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZD_ENV_NAME`.
+- **Description:** Markers `ingestion`, `retrieval`, `agent`. Skip without canonical env. OIDC: GitHub env `credit-policy-live`; UAMI roles = Operator minus **Azure Bot Service Contributor**; vars `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZD_ENV_NAME`.
 
 ### PR 8 — Teams publish documentation and skip-level test
 
 - **Title:** `docs: Teams Just-you publish runbook and teams marker`
 - **Files:** `docs/teams-smoke-checklist.md` (**created here**, filled), `tests/test_teams.py`, README publish section
 - **Depends on:** PR 6
-- **Description:** Portal click-path, Bot Service RP, Just you vs org. **Sideload ZIP is in-scope** (K18: tenant allows custom apps) as the official fallback if Direct publish fails. Checklist 3b (project MI; 403 → also agent identity) and 3c (sideload). `pytest.mark.teams` skips unless `E2E_TEAMS=1`; if the flag is set and no client exists, **skip** (do not `fail()`).
+- **Description:** Portal click-path, Azure AI Bot Service RP (`Microsoft.BotService`), Just you vs org. **Sideload ZIP is in-scope** (K18: tenant allows custom apps) as the official fallback if Direct publish fails. Checklist 3b (project MI; 403 → also agent identity) and 3c (sideload). `pytest.mark.teams` skips unless `E2E_TEAMS=1`; if the flag is set and no client exists, **skip** (do not `fail()`).
 
 ### PR 9 (optional follow-up) — REST publish automation + hosted-agent spike
 
