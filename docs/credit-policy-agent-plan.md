@@ -167,7 +167,7 @@ sequenceDiagram
   IDX-->>KB: chunks + source refs
   KB-->>MCP: extractive payload + citations
   MCP-->>A: tool result
-  A->>A: Grounded answer; refuse if empty
+  A->>A: Grounded answer, refuse if empty
   A-->>U: Text + document citations
 ```
 
