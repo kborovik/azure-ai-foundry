@@ -319,3 +319,23 @@ def test_makefile_infra_create_emits_outputs_json(repo_root: Path) -> None:
 def test_gha_deploy_writes_outputs_json(repo_root: Path) -> None:
     text = (repo_root / ".github/workflows/deploy.yml").read_text(encoding="utf-8")
     assert "terraform -chdir=infra output -json > infra/outputs.json" in text
+
+
+def test_storage_public_network_access_is_enabled_string() -> None:
+    storage = _read("storage.tf")
+    assert re.search(r'public_network_access\s*=\s*"Enabled"', storage)
+    assert "public_network_access_enabled" not in storage
+
+
+def test_search_and_foundry_keep_bool_public_network_access() -> None:
+    search = _read("search.tf")
+    foundry = _read("foundry.tf")
+    assert re.search(r"public_network_access_enabled\s*=\s*true", search)
+    assert re.search(r"public_network_access_enabled\s*=\s*true", foundry)
+    assert not re.search(r"public_network_access\s*=", search)
+    assert not re.search(r"public_network_access\s*=", foundry)
+
+
+def test_azurerm_provider_version_supports_storage_public_network_access() -> None:
+    versions = _read("versions.tf")
+    assert re.search(r'version\s*=\s*">=\s*5\.5\.0"', versions)

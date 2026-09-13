@@ -4,6 +4,7 @@
 
 ### Changed
 
+- **Storage network:** `azurerm_storage_account` uses `public_network_access = "Enabled"` (string). Deprecated `public_network_access_enabled` is dropped on storage. Search and Foundry keep the bool attribute. AzureRM provider floor is `>= 5.5.0`.
 - **Env fill:** `gmake infra-create` writes `infra/outputs.json` (`terraform output -json` shape). Talos and pytest fill missing canonical env from that file unless `--no-terraform`. They never spawn `terraform output`. `gmake infra-destroy` drops the file. The file is gitignored.
 - **Infra backend:** `gmake infra-backend-create` / `infra-backend-show` / `infra-backend-destroy` use Azure CLI (`az group create`, `az storage account create`, `az storage container create`, `az group show` / `az storage account show`, `az group delete`). Drop `infra/backend/` Terraform. Account name is the fixed string `sttfstlab5` (never workload `stcp*`). Operator gets Storage Blob Data Contributor on the account.
 - **Make recipes:** Rename `gmake infra` to `gmake infra-create` and `gmake infra-backend` to `gmake infra-backend-create`. Add `gmake infra-show` (`terraform show`) and `gmake infra-backend-show` (`az show`).
