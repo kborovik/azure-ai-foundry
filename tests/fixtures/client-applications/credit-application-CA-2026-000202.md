@@ -18,9 +18,9 @@ facility:
   dscr: 1.10x
   vacancy_stress: 10%
 attached_documents:
-  - CRE valuation report
-  - rent roll
+  - 2 years tax returns
   - YTD P&L
+  - CRE valuation
 narrative: I, Bram Cotter of Fabrikam Logistics, apply for a stabilized commercial real estate facility of USD 3,600,000 on a property valued at USD 5,000,000. Stated LTV is 72% and DSCR is 1.10x.
 ---
 
@@ -55,9 +55,9 @@ stabilized commercial real estate
 
 I am listing the titles of documents I am submitting. I am not enclosing the files.
 
-- CRE valuation report
-- rent roll
+- 2 years tax returns
 - YTD P&L
+- CRE valuation
 
 ## Applicant statement
 

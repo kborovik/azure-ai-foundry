@@ -77,7 +77,7 @@ PRODUCT_FAMILY_LABEL = {
     "sme_lending": "SME working-capital facility",
     "construction_development": "construction and development facility",
 }
-# Titles from CP-DOC-2026-01 and product-specific policy lists. Titles only.
+# Titles that appear verbatim in published policy Markdown (CP-DOC, CP-COL, CP-SME, CP-CND).
 PRODUCT_REQUIRED_DOCUMENTS = {
     "residential_mortgage": (
         "last 2 pay stubs",
@@ -85,24 +85,68 @@ PRODUCT_REQUIRED_DOCUMENTS = {
         "residential appraisal",
     ),
     "commercial_real_estate": (
-        "CRE valuation report",
-        "rent roll",
+        "2 years tax returns",
         "YTD P&L",
+        "CRE valuation",
     ),
     "unsecured_consumer": (
         "last 2 pay stubs",
         "W-2",
-        "government photo ID",
     ),
     "sme_lending": (
-        "2 years tax returns",
-        "YTD P&L",
         "personal guarantee",
+        "last 2 pay stubs",
+        "W-2",
     ),
     "construction_development": (
         "completion guarantee",
-        "land valuation",
-        "construction budget",
+        "2 years tax returns",
+        "YTD P&L",
+    ),
+}
+# field, op, limit — facts.yaml literals (80%, 43%, 680, 65%, 1.25x, USD 2,500,000, …).
+PRODUCT_FACILITY_LIMITS: dict[str, tuple[tuple[str, str, float], ...]] = {
+    "residential_mortgage": (
+        ("ltv", "<=", 80.0),
+        ("dti", "<=", 43.0),
+        ("credit_score", ">=", 680.0),
+    ),
+    "commercial_real_estate": (
+        ("ltv", "<=", 65.0),
+        ("dscr", ">=", 1.25),
+    ),
+    "unsecured_consumer": (
+        ("loan_amount", "<=", 50_000.0),
+        ("credit_score", ">=", 700.0),
+        ("dti", "<=", 36.0),
+        ("tenor_months", "<=", 60.0),
+    ),
+    "sme_lending": (
+        ("loan_amount", "<=", 2_500_000.0),
+        ("years_in_operation", ">=", 3.0),
+        ("tenor_months", "<=", 12.0),
+    ),
+    "construction_development": (
+        ("ltv", "<=", 55.0),
+        ("tenor_months", "<=", 18.0),
+    ),
+}
+FACILITY_PROMPT_HINTS = {
+    "residential_mortgage": (
+        "Owner-occupied residential: max LTV 80%, max DTI 43%, min credit score 680."
+    ),
+    "commercial_real_estate": "Stabilized CRE: max LTV 65%, min DSCR 1.25x.",
+    "unsecured_consumer": (
+        "Unsecured personal loan: max USD 50,000, max term 60 months, min FICO 700, "
+        "max DTI 36%."
+    ),
+    "sme_lending": (
+        "SME working capital: max USD 2,500,000, personal guarantee above USD 250,000, "
+        "max tenor 12 months, min 3 years in operation. Amount must be above USD 250,000."
+    ),
+    "construction_development": (
+        "Construction: construction max LTV 55%, max interest-only 18 months, "
+        "completion guarantee required."
     ),
 }
 

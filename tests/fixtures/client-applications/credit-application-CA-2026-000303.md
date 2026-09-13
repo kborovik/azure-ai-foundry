@@ -16,8 +16,8 @@ facility:
   years_in_operation: 5 years
   tenor_months: "12"
 attached_documents:
-  - YTD P&L
-  - personal guarantee
+  - last 2 pay stubs
+  - W-2
 narrative: I, Nia Pell of Pell Studio, apply for an SME working-capital facility of USD 400,000. The business has been in operation for 5 years and I request a 12 month tenor.
 ---
 
@@ -50,8 +50,8 @@ SME working-capital facility
 
 I am listing the titles of documents I am submitting. I am not enclosing the files.
 
-- YTD P&L
-- personal guarantee
+- last 2 pay stubs
+- W-2
 
 ## Applicant statement
 

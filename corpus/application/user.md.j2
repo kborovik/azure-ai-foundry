@@ -24,11 +24,12 @@ JSON schema:
 Policy facts.yaml (verbatim literals; drive the facility numbers):
 {{ facts_yaml }}
 
-Facility numbers for this product (do not comment on policy in the narrative):
+Facility numbers for this product (facts.yaml literals; do not comment on policy in the narrative):
+{{ facility_hint }}
 {% if application_type == "accepted" %}
-All published numeric thresholds for this product must clear (strictly inside the limit).
+All of those published numeric thresholds must clear (strictly inside the limit). Put the matching figures in facility.
 {% elif application_type == "rejected" %}
-Breach at least one published numeric limit for this product (for example LTV, DSCR, amount, DTI, or FICO). Put the breaching figure in facility. Do not say that it fails or should be declined.
+Breach at least one of those published numeric limits. Put the breaching figure in facility. Do not say that it fails or should be declined.
 {% else %}
 Facility numbers may clear published limits. attached_documents is already missing at least one required title. Do not mention omitted documents.
 {% endif %}

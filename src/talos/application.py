@@ -29,8 +29,10 @@ from talos.constants import (
     DEFAULT_APPLICATION_USER_PROMPT_RELATIVE,
     DEFAULT_CHAT_DEPLOYMENT,
     EMAIL_DOMAIN,
+    FACILITY_PROMPT_HINTS,
     FORBIDDEN_OUTCOME_TOKENS,
     FOUNDRY_SCOPE,
+    PRODUCT_FACILITY_LIMITS,
     PRODUCT_FAMILIES,
     PRODUCT_FAMILY_LABEL,
     PRODUCT_REQUIRED_DOCUMENTS,
@@ -70,9 +72,11 @@ NATIONAL_ID_RE = re.compile(r"\b\d{6}[- ]\d{4}\b")
 FRONT_MATTER_RE = re.compile(r"^---\n(.*?)\n---", re.M | re.S)
 JUDGEMENT_LEAK_RE = re.compile(
     r"application_type|intended_outcome|expected_judgement|missing_items|"
-    r"\bmissing-data\b|\bapplicationtype\b",
+    r"\bmissing-data\b|\bapplicationtype\b|"
+    r"\baccepted\b|\brejected\b|\bapproved\b|\bdeclined\b|\bdenied\b",
     re.I,
 )
+FACILITY_NUMBER_RE = re.compile(r"(\d+(?:\.\d+)?)")
 OPERATOR_RECORD_KEYS = (
     "application_type",
     "expected_judgement",
@@ -185,6 +189,60 @@ def attached_documents_for(
     if application_type == "missing-data":
         return required[1:], (required[0],)
     return required, ()
+
+
+def parse_facility_number(value: object) -> float | None:
+    match = FACILITY_NUMBER_RE.search(str(value).replace(",", ""))
+    if match is None:
+        return None
+    return float(match.group(1))
+
+
+def facility_clears_limit(value: float, op: str, limit: float) -> bool:
+    if op == "<=":
+        return value <= limit
+    if op == ">=":
+        return value >= limit
+    raise TalosError(f"unknown facility comparison {op!r}", exit_code=1)
+
+
+def facility_limit_errors(
+    facility: dict[str, Any],
+    *,
+    application_type: str,
+    product_family: str,
+) -> list[str]:
+    checks = PRODUCT_FACILITY_LIMITS[product_family]
+    evaluated: list[tuple[str, bool]] = []
+    errors: list[str] = []
+    required_fields = {field for field, _op, _limit in checks}
+    if application_type in ("accepted", "rejected"):
+        missing = [
+            field for field in required_fields if facility.get(field) in (None, "")
+        ]
+        if missing:
+            errors.append(
+                f"facility missing {', '.join(sorted(missing))} for {product_family}"
+            )
+            return errors
+    for field, op, limit in checks:
+        raw = facility.get(field)
+        if raw in (None, ""):
+            continue
+        number = parse_facility_number(raw)
+        if number is None:
+            errors.append(f"facility.{field} is not numeric: {raw!r}")
+            continue
+        evaluated.append((field, facility_clears_limit(number, op, limit)))
+    if not evaluated:
+        return errors
+    clears = [ok for _field, ok in evaluated]
+    if application_type == "accepted" and not all(clears):
+        failed = [field for field, ok in evaluated if not ok]
+        errors.append(f"accepted facility must clear published limits; failed {failed}")
+    if application_type == "rejected" and all(clears):
+        errors.append("rejected facility must breach at least one published limit")
+    return errors
 
 
 def parse_llm_json(text: str) -> dict[str, Any]:
@@ -371,6 +429,9 @@ def validate_record(
         errors.append(f"unknown product_family {family!r}")
         return errors
     required_docs = PRODUCT_REQUIRED_DOCUMENTS[family]
+    expected_product = PRODUCT_FAMILY_LABEL[family]
+    if str(record.get("product") or "").strip() != expected_product:
+        errors.append(f"product must be {expected_product!r}")
 
     facility = record.get("facility")
     if not isinstance(facility, dict) or not facility:
@@ -379,6 +440,13 @@ def validate_record(
         for key in REQUIRED_FACILITY_KEYS:
             if key not in facility or facility[key] in (None, ""):
                 errors.append(f"facility.{key} is required")
+        errors.extend(
+            facility_limit_errors(
+                facility,
+                application_type=application_type,
+                product_family=family,
+            )
+        )
 
     attached = record.get("attached_documents")
     if not isinstance(attached, list) or not all(
@@ -758,6 +826,7 @@ def _complete_one(
             watermark=WATERMARK,
             schema=schema_text,
             facts_yaml=facts_text,
+            facility_hint=FACILITY_PROMPT_HINTS[product_family],
             used_identities=sorted(used),
             previous_errors=last_errors,
         )
@@ -773,7 +842,7 @@ def _complete_one(
             record["application_id"] = application_id
             record["customer_id"] = str(record.get("customer_id") or customer_id)
             record["product_family"] = product_family
-            record["product"] = str(record.get("product") or product_label)
+            record["product"] = product_label
             record["attached_documents"] = list(attached_documents)
             for leak_key in OPERATOR_RECORD_KEYS:
                 record.pop(leak_key, None)

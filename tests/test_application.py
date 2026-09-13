@@ -75,7 +75,27 @@ def _valid_record(kind: str, **overrides: object) -> dict:
         "annual_income": "USD 90,000",
         "product": PRODUCT_FAMILY_LABEL[family],
         "product_family": family,
-        "facility": {"loan_amount": "USD 200,000", "credit_score": "720"},
+        "facility": {
+            "accepted": {
+                "loan_amount": "USD 320,000",
+                "property_value": "USD 450,000",
+                "ltv": "71%",
+                "dti": "36%",
+                "credit_score": "720",
+                "occupancy": "owner-occupied",
+            },
+            "rejected": {
+                "loan_amount": "USD 3,600,000",
+                "property_value": "USD 5,000,000",
+                "ltv": "72%",
+                "dscr": "1.10x",
+            },
+            "missing-data": {
+                "loan_amount": "USD 400,000",
+                "years_in_operation": "5 years",
+                "tenor_months": "12",
+            },
+        }[kind],
         "narrative": "I request this synthetic demo facility and list the documents I am submitting.",
         "attached_documents": list(attached),
     }
@@ -166,7 +186,7 @@ def test_generate_one_slot_writes_opaque_customer_filing(tmp_path: Path) -> None
     assert parsed["application_id"] == application_id
     assert parsed["customer_id"] == "SYN-111111"
     assert parsed["email"].endswith("@example.invalid")
-    assert parsed["facility"]["loan_amount"] == "USD 200,000"
+    assert parsed["facility"]["loan_amount"] == "USD 320,000"
     assert parsed["narrative"]
     assert "identity" in text.lower()
     assert "product" in text.lower()
@@ -419,6 +439,63 @@ def test_allocate_application_id_skips_used() -> None:
 def test_forbidden_outcome_tokens_are_rejected_in_id() -> None:
     for token in FORBIDDEN_OUTCOME_TOKENS:
         assert contains_forbidden_outcome_token(f"CA-{token}-2026-01")
+
+
+def test_required_doc_titles_appear_in_published_policies(repo_root: Path) -> None:
+    corpus = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (repo_root / "data/credit-policies").glob("*.md")
+    ).lower()
+    for titles in PRODUCT_REQUIRED_DOCUMENTS.values():
+        for title in titles:
+            assert title.lower() in corpus, title
+
+
+def test_validate_record_rejects_judgement_tokens_in_narrative() -> None:
+    record = _valid_record("accepted", narrative="Please treat this as accepted.")
+    errors = validate_record(
+        record,
+        application_type="accepted",
+        used=set(),
+        required_id=record["application_id"],
+        product_family="residential_mortgage",
+    )
+    assert any("judgement" in err or "ApplicationType" in err for err in errors)
+
+
+def test_validate_record_pins_product_label() -> None:
+    record = _valid_record("accepted", product="some other mortgage product")
+    errors = validate_record(
+        record,
+        application_type="accepted",
+        used=set(),
+        required_id=record["application_id"],
+        product_family="residential_mortgage",
+    )
+    assert any("product must be" in err for err in errors)
+
+
+def test_validate_record_checks_facility_limits() -> None:
+    too_high = _valid_record("accepted")
+    too_high["facility"] = dict(too_high["facility"], ltv="85%")
+    errors = validate_record(
+        too_high,
+        application_type="accepted",
+        used=set(),
+        required_id=too_high["application_id"],
+        product_family="residential_mortgage",
+    )
+    assert any("clear published limits" in err for err in errors)
+    inside = _valid_record("rejected")
+    inside["facility"] = dict(inside["facility"], ltv="60%", dscr="1.40x")
+    errors = validate_record(
+        inside,
+        application_type="rejected",
+        used=set(),
+        required_id=inside["application_id"],
+        product_family="commercial_real_estate",
+    )
+    assert any("breach at least one" in err for err in errors)
 
 
 def test_parse_llm_json_strips_fence() -> None:
