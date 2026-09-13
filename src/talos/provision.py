@@ -142,14 +142,19 @@ class SdkAgentOps:
                 allowed_tools=["knowledge_base_retrieve"],
                 project_connection_id=connection_name,
             )
+            # V14 wants temperature=0. gpt-5-mini Responses invoke returns 400
+            # "Unsupported parameter: temperature" when the stored definition
+            # includes it, so omit on create for this model pin.
+            definition_kwargs: dict[str, Any] = {
+                "model": model,
+                "instructions": instructions,
+                "tools": [mcp],
+            }
+            if not str(model).startswith("gpt-5"):
+                definition_kwargs["temperature"] = 0
             agent = client.agents.create_version(
                 agent_name=agent_name,
-                definition=PromptAgentDefinition(
-                    model=model,
-                    instructions=instructions,
-                    tools=[mcp],
-                    temperature=0,
-                ),
+                definition=PromptAgentDefinition(**definition_kwargs),
             )
         version = getattr(agent, "version", None)
         if version is None:

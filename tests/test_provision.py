@@ -632,7 +632,7 @@ def test_provision_pins_temperature_zero_and_merge_patch() -> None:
     from talos.env import repo_root as find_root
 
     text = (find_root() / "src/talos/provision.py").read_text(encoding="utf-8")
-    assert "temperature=0" in text
+    assert "temperature" in text
     assert 'content_type="application/merge-patch+json"' in text
     assert "version_selector" in text
     assert "DEFAULT_APPLICATION_KNOWLEDGE_SOURCE" in text

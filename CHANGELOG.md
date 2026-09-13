@@ -18,6 +18,7 @@
 ### Added
 
 - **EvaluationMode:** `agents/credit-policy-agent.instructions.md` evaluates by `application_id` or `customer_name`, asks if both are missing, and cites policy documents only.
+- **Live pytest:** markers `ingestion`, `retrieval`, and `agent` skip without canonical Azure env. Evaluate-by-id, evaluate-by-name, ask-when-missing, and one case per ApplicationType. Unit fixtures in `tests/fixtures/client-applications/`.
 - **`talos deploy` two sources:** blob-sync both local corpora (hash-skip), PUT `ks-credit-policies` and `ks-client-applications`, run both indexers, `--wait` until policy ≥12 and application ≥3, PUT `kb-credit-policies` with both sources, ARM MCP connection, agent `temperature=0` and `version_selector` merge-patch. Blob container `client-applications` is in Terraform.
 - **`talos generate application`:** Foundry `gpt-5-mini` emits a unique SyntheticBorrower (`--type` or `--all`; `--force` overwrites a slot). Validate+one retry. Gitignore `data/client-applications/*.md` and `manifest.json`. Optional blob hash-skip. Does not PUT knowledge sources.
 - **`gmake infra-plan`:** `terraform plan` in `infra/` with `-var-file=<env>.tfvars` after `infra-init` (`ENV=dev1|prd1`). Does not write `infra/outputs.json`.
