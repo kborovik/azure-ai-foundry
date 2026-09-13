@@ -36,10 +36,17 @@ Azure Developer CLI (`azd`) with Bicep provision Storage, Azure AI Search (Basic
 **Create Azure resources**
 
 ```bash
+gmake bicep
+```
+
+Equivalent:
+
+```bash
 az login
 azd auth login
 azd env new dev
 azd env set AZURE_LOCATION swedencentral
+azd env set AZURE_SUBSCRIPTION_ID <subscription>
 azd up
 ```
 

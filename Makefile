@@ -28,10 +28,16 @@ dry-run = $(findstring n,$(firstword $(MAKEFLAGS)))
 
 need-azd = $(if $(dry-run),,$(if $(shell command -v azd),,$(error azd not on PATH — https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd)))
 need-az = $(if $(dry-run),,$(if $(shell command -v az),,$(error az CLI required — https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)))
+need-az-auth = $(if $(dry-run),,$(shell az account show >/dev/null 2>&1)$(if $(filter 0,$(.SHELLSTATUS)),,$(error az not authenticated — run: az login)))
+need-azd-auth = $(if $(dry-run),,$(shell azd auth login --check-status >/dev/null 2>&1)$(if $(filter 0,$(.SHELLSTATUS)),,$(error azd not authenticated — run: azd auth login)))
 need-gh = $(if $(dry-run),,$(if $(shell command -v gh),,$(error gh CLI required — https://cli.github.com/)))
 need-gh-auth = $(if $(dry-run),,$(shell gh auth status >/dev/null 2>&1)$(if $(filter 0,$(.SHELLSTATUS)),,$(error gh not authenticated — run: gh auth login)))
 need-clean = $(if $(dry-run),,$(if $(shell git status --porcelain),$(error working tree not clean — commit or stash first)))
 need-part = $(if $(part),,$(error usage: gmake release major|minor|patch))
+
+AZD_ENV ?= dev
+AZURE_LOCATION ?= swedencentral
+AZURE_SUBSCRIPTION_ID ?= f298e323-efae-4203-ba61-fc3496190479
 
 # Recursive glob. `*` skips dot-dirs (.git, .venv).
 rwildcard = $(strip \
@@ -40,7 +46,7 @@ rwildcard = $(strip \
 
 default: help
 
-.PHONY: help check generate deploy e2e clean preflight release major minor patch
+.PHONY: help check generate deploy bicep e2e clean preflight release major minor patch
 .PHONY: _release-pre _release-bump _release-tag _release-gh
 
 ###############################################################################
@@ -65,9 +71,27 @@ deploy: .venv ## Provision Foundry IQ + agent (`talos deploy --wait`)
 preflight: .venv ## Read-only az / azd session check
 	$(call need-az)
 	$(call need-azd)
+	$(call need-az-auth)
+	$(call need-azd-auth)
 	$(call header,Azure preflight)
 	az account show --query name -o tsv
+	azd auth login --check-status
 	azd env list
+
+bicep: ## Check az/azd auth; create env dev; azd up
+	$(call need-az)
+	$(call need-azd)
+	$(call need-az-auth)
+	$(call need-azd-auth)
+	$(call header,Checking az / azd auth)
+	az account show --query name -o tsv
+	azd auth login --check-status
+	$(call header,Creating azd env $(AZD_ENV))
+	azd env select $(AZD_ENV) >/dev/null 2>&1 || azd env new $(AZD_ENV) --location $(AZURE_LOCATION) --subscription $(AZURE_SUBSCRIPTION_ID) --no-prompt
+	azd env set AZURE_LOCATION $(AZURE_LOCATION)
+	azd env set AZURE_SUBSCRIPTION_ID $(AZURE_SUBSCRIPTION_ID)
+	$(call header,Running azd up)
+	azd up --environment $(AZD_ENV) --no-prompt
 
 # `gmake e2e FILE=<path-or-stem>` scopes to one test file; unset = live markers.
 e2e_target := $(if $(FILE),$(firstword $(wildcard $(FILE) tests/$(FILE) tests/$(FILE).py)),)
@@ -154,10 +178,11 @@ uv.lock: pyproject.toml
 # Target-line double-hash descriptions, read with $(file) and split with $(let).
 help-src := $(file < $(firstword $(MAKEFILE_LIST)))
 help-words := $(foreach w,$(subst $(space),$(s),$(help-src)),$(if $(and $(findstring $(s)##$(s),$(w)),$(filter-out \#%,$(w))),$(w)))
+pad-bicep := bicep$(space)$(space)$(space)$(space)$(space)
 pad-check := check$(space)$(space)$(space)$(space)$(space)
 pad-clean := clean$(space)$(space)$(space)$(space)$(space)
 pad-deploy := deploy$(space)$(space)$(space)$(space)
-pad-generate := generate$(space)
+pad-generate := generate$(space)$(space)
 pad-preflight := preflight$(space)
 pad-release := release$(space)$(space)$(space)
 pad-e2e := e2e$(space)$(space)$(space)$(space)$(space)$(space)$(space)
