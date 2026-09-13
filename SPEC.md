@@ -88,7 +88,7 @@ T13|x|add azurerm backend + bootstrap; migrate-state; `infra/dev1.tfvars`+`prd1.
 T14|x|swap infra-backend-* terraform → az CLI; drop `infra/backend/`|V30,I.infra
 T15|x|Makefile infra-create emit `infra/outputs.json`; talos+pytest fill missing env from file; drop live `terraform output`; gitignore file; infra-destroy drop file|V15,I.infra,I.env,I.cmd
 T16|x|swap deprecated `public_network_access_enabled` → `public_network_access` on storage (`"Enabled"`); search/foundry same iff provider exposes string attr|I.infra
-T17|.|swap standing init assert+docs `-migrate-state` → `-reconfigure`|V30,B1,I.infra
+T17|x|swap standing init assert+docs `-migrate-state` → `-reconfigure`|V30,B1,I.infra
 
 ## §B BUGS
 

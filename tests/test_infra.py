@@ -299,9 +299,11 @@ def test_tfstate_account_name_is_fixed_sttfst_prefix(repo_root: Path) -> None:
     assert name.isalnum() and name.islower()
 
 
-def test_makefile_migrate_state_and_backend_key(repo_root: Path) -> None:
+def test_makefile_reconfigure_and_backend_key(repo_root: Path) -> None:
     makefile = (repo_root / "Makefile").read_text(encoding="utf-8")
-    assert "-migrate-state" in makefile
+    init = _makefile_recipe(makefile, "infra-init")
+    assert "-reconfigure" in init
+    assert "-migrate-state" not in makefile
     assert "key=$(ENV).tfstate" in makefile
     assert "sttfst" in makefile
     assert "rg-credit-policy-tfstate" in makefile

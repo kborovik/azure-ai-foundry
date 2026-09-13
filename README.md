@@ -60,7 +60,7 @@ az storage container create --name tfstate --account-name sttfstlab5
 az role assignment create --role "Storage Blob Data Contributor" \
   --assignee <operator-object-id> \
   --scope /subscriptions/<subscription>/resourceGroups/rg-credit-policy-tfstate/providers/Microsoft.Storage/storageAccounts/sttfstlab5
-terraform -chdir=infra init -migrate-state \
+terraform -chdir=infra init -reconfigure \
   -backend-config="storage_account_name=sttfstlab5" \
   -backend-config="key=dev1.tfstate"
 terraform -chdir=infra apply -var-file=dev1.tfvars
@@ -68,7 +68,7 @@ terraform -chdir=infra apply -var-file=dev1.tfvars
 
 `terraform apply` deploys the resource group, Storage, Search, Foundry, model deployments, and RBAC. It does not create Foundry IQ objects. Environment names are `dev1` and `prd1` only.
 
-`gmake infra-create` writes `infra/outputs.json` after apply. `uv run talos generate` and `uv run talos deploy` fill missing canonical names from that file unless you pass `--no-terraform`. They never spawn `terraform output`. CLI flags override process environment variables. A stray `.env` is gitignored and is not loaded. Terraform state (`*.tfstate`) and `infra/outputs.json` are gitignored and are never committed. First `terraform init -migrate-state` copies local state to the azurerm backend.
+`gmake infra-create` writes `infra/outputs.json` after apply. `uv run talos generate` and `uv run talos deploy` fill missing canonical names from that file unless you pass `--no-terraform`. They never spawn `terraform output`. CLI flags override process environment variables. A stray `.env` is gitignored and is not loaded. Terraform state (`*.tfstate`) and `infra/outputs.json` are gitignored and are never committed. Standing `terraform init -reconfigure` reconstructs the azurerm backend after clone.
 
 ## Talos CLI
 
