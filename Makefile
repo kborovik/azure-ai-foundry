@@ -54,7 +54,7 @@ rwildcard = $(strip \
 default: help
 
 .PHONY: help check generate deploy
-.PHONY: infra-create infra-show infra-destroy infra
+.PHONY: infra-create infra-show infra-destroy infra infra-init
 .PHONY: infra-backend-create infra-backend-show infra-backend-destroy infra-backend
 .PHONY: e2e clean preflight release major minor patch
 .PHONY: _release-pre _release-bump _release-tag _release-gh
@@ -133,33 +133,26 @@ infra-backend-destroy:
 	$(call header,Deleting tfstate backend)
 	az group delete --name $(TFSTATE_RG) --yes
 
-define init-remote
+infra-init:
+	$(call need-env)
+	$(call need-az)
+	$(call need-terraform)
+	$(call need-az-auth)
 	az storage account show --name $(TFSTATE_ACCOUNT) --resource-group $(TFSTATE_RG) --output none \
 	  || { echo "backend storage missing — run: gmake infra-backend-create" >&2; exit 1; }
 	terraform -chdir=infra init -input=false -reconfigure \
-	  -backend-config="storage_account_name=$(TFSTATE_ACCOUNT)" \
-	  -backend-config="key=$(ENV).tfstate"
-endef
+		-backend-config="storage_account_name=$(TFSTATE_ACCOUNT)" \
+		-backend-config="key=$(ENV).tfstate"
 
-infra-create: ## terraform apply in infra/ (ENV=dev1|prd1, default dev1)
-	$(call need-env)
-	$(call need-az)
-	$(call need-terraform)
-	$(call need-az-auth)
+infra-create: infra-init ## terraform apply in infra/ (ENV=dev1|prd1, default dev1)
 	$(call header,Checking az auth)
 	az account show --query name -o tsv
 	$(call header,Terraform apply $(ENV))
-	$(init-remote)
 	terraform -chdir=infra apply -input=false -auto-approve \
 		-var-file=$(ENV).tfvars
 
-infra-show: ## Show workload terraform state (ENV=dev1|prd1)
-	$(call need-env)
-	$(call need-az)
-	$(call need-terraform)
-	$(call need-az-auth)
+infra-show: infra-init ## Show workload terraform state (ENV=dev1|prd1)
 	$(call header,Terraform show $(ENV))
-	$(init-remote)
 	terraform -chdir=infra show
 
 infra:
@@ -168,13 +161,8 @@ infra:
 infra-backend:
 	$(error gmake infra-backend renamed — use gmake infra-backend-create)
 
-infra-destroy: ## terraform destroy workload stack (ENV=dev1|prd1)
-	$(call need-env)
-	$(call need-az)
-	$(call need-terraform)
-	$(call need-az-auth)
+infra-destroy: infra-init ## terraform destroy workload stack (ENV=dev1|prd1)
 	$(call header,Terraform destroy $(ENV))
-	$(init-remote)
 	terraform -chdir=infra destroy -input=false -auto-approve \
 		-var-file=$(ENV).tfvars
 
