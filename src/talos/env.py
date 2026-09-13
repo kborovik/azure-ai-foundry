@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+from collections.abc import MutableMapping
 from pathlib import Path
 
 from talos.constants import REQUIRED_ENV
@@ -27,6 +28,17 @@ def parse_azd_values(text: str) -> dict[str, str]:
     return values
 
 
+def load_dotenv_file(path: Path | None = None) -> dict[str, str]:
+    dotenv_path = path or (repo_root() / ".env")
+    if not dotenv_path.is_file():
+        return {}
+    try:
+        text = dotenv_path.read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    return parse_azd_values(text)
+
+
 def load_azd_env() -> dict[str, str]:
     try:
         proc = subprocess.run(
@@ -42,15 +54,29 @@ def load_azd_env() -> dict[str, str]:
     return parse_azd_values(proc.stdout)
 
 
+def fill_missing(env: MutableMapping[str, str], extra: dict[str, str]) -> None:
+    for key, value in extra.items():
+        if value and not env.get(key):
+            env[key] = value
+
+
+def apply_dotenv(
+    env: MutableMapping[str, str] | None = None,
+    path: Path | None = None,
+) -> MutableMapping[str, str]:
+    target: MutableMapping[str, str] = os.environ if env is None else env
+    fill_missing(target, load_dotenv_file(path))
+    return target
+
+
 def resolve_env(*, use_azd: bool) -> dict[str, str]:
     env = dict(os.environ)
+    fill_missing(env, load_dotenv_file())
     if not use_azd:
         return env
-    missing = [name for name in REQUIRED_ENV if not env.get(name)]
-    if not missing:
+    if not missing_required(env):
         return env
-    for key, value in load_azd_env().items():
-        env.setdefault(key, value)
+    fill_missing(env, load_azd_env())
     return env
 
 
@@ -64,12 +90,12 @@ def azure_generate_configured(env: dict[str, str], account_url: str = "") -> boo
 
 def resolve_generate_env(*, use_azd: bool) -> dict[str, str]:
     env = dict(os.environ)
+    fill_missing(env, load_dotenv_file())
     if not use_azd:
         return env
     if azure_generate_configured(env):
         return env
-    for key, value in load_azd_env().items():
-        env.setdefault(key, value)
+    fill_missing(env, load_azd_env())
     return env
 
 
@@ -83,6 +109,7 @@ def require_env(env: dict[str, str]) -> None:
         names = ", ".join(missing)
         raise TalosError(
             f"Azure environment is not configured (missing {names}). "
-            "Set the variables, run from an azd environment, or pass CLI flags.",
+            "Set the variables, add them to .env, run from an azd environment, "
+            "or pass CLI flags.",
             exit_code=2,
         )
