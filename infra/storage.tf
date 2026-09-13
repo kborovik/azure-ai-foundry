@@ -8,7 +8,6 @@ resource "azurerm_storage_account" "storage" {
   min_tls_version                 = "TLS1_2"
   allow_nested_items_to_be_public = false
   https_traffic_only_enabled      = true
-  public_network_access           = "Enabled"
   access_tier                     = "Hot"
   tags                            = local.tags
 }
