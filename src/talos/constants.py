@@ -7,7 +7,9 @@ ARM_SCOPE = "https://management.azure.com/.default"
 FOUNDRY_SCOPE = "https://ai.azure.com/.default"
 
 DEFAULT_CONTAINER = "credit-policies"
+DEFAULT_APPLICATION_CONTAINER = "client-applications"
 DEFAULT_KNOWLEDGE_SOURCE = "ks-credit-policies"
+DEFAULT_APPLICATION_KNOWLEDGE_SOURCE = "ks-client-applications"
 DEFAULT_KNOWLEDGE_BASE = "kb-credit-policies"
 DEFAULT_AGENT_NAME = "credit-policy-agent"
 DEFAULT_CONNECTION_NAME = "conn-kb-credit-policies"
@@ -17,6 +19,22 @@ DEFAULT_INSTRUCTIONS_RELATIVE = "agents/credit-policy-agent.instructions.md"
 DEFAULT_FACTS_RELATIVE = "corpus/facts.yaml"
 DEFAULT_TEMPLATES_RELATIVE = "corpus/templates"
 DEFAULT_OUTPUT_RELATIVE = "data/credit-policies"
+DEFAULT_APPLICATION_OUTPUT_RELATIVE = "data/client-applications"
+DEFAULT_APPLICATION_SCHEMA_RELATIVE = "corpus/application/schema.json"
+DEFAULT_APPLICATION_SYSTEM_PROMPT_RELATIVE = "corpus/application/system.md"
+DEFAULT_APPLICATION_USER_PROMPT_RELATIVE = "corpus/application/user.md.j2"
+DEFAULT_APPLICATION_TEMPLATE_RELATIVE = "corpus/application/document.md.j2"
+
+APPLICATION_TYPES = ("accepted", "rejected", "missing-data")
+APPLICATION_TYPE_ID_TOKEN = {
+    "accepted": "ACCEPTED",
+    "rejected": "REJECTED",
+    "missing-data": "MISSING-DATA",
+}
+APPLICATION_ID_RE = r"^CA-(ACCEPTED|REJECTED|MISSING-DATA)-\d{4}-\d{2}$"
+CUSTOMER_ID_RE = r"^SYN-\d{6}$"
+EMAIL_DOMAIN = "example.invalid"
+APPLICATION_LLM_ATTEMPTS = 2
 
 WATERMARK = "SYNTHETIC — DEMO ONLY"
 
@@ -65,6 +83,7 @@ TEAMS_CHECKLIST_QUERY_IDS = (
 )
 
 MIN_INDEXED_ITEMS = 12
+MIN_APPLICATION_INDEXED_ITEMS = 3
 WAIT_TIMEOUT_SECONDS = 15 * 60
 POLL_INTERVAL_SECONDS = 10.0
 CONNECTION_RETRIES = 5
@@ -100,13 +119,21 @@ KS_DESCRIPTION = (
     "Use for credit-officer policy questions."
 )
 
+KS_APPLICATION_DESCRIPTION = (
+    "Synthetic Contoso Demo Bank client applications for demo evaluation only: "
+    "accepted, rejected, and missing-data slots. Identify an application by "
+    "application_id or customer_name. Not a production origination system."
+)
+
 KB_DESCRIPTION = (
     "Contoso Demo Bank credit policy knowledge base. Grounds answers in synthetic "
-    "published policies only."
+    "published policies and evaluates synthetic client applications."
 )
 
 KB_RETRIEVAL_INSTRUCTIONS = (
     "Use ks-credit-policies for all credit policy, LTV, DTI, DSCR, collateral, "
     "exception authority, prohibited sector, related-party, documentation, construction, "
-    "and ESG overlay questions. Do not use web or other sources."
+    "and ESG overlay questions. Use ks-client-applications when evaluating a client "
+    "application identified by application_id or customer_name. Do not use web or "
+    "other sources."
 )

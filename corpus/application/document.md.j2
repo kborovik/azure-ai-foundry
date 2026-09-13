@@ -1,0 +1,56 @@
+{{ watermark }}
+
+---
+application_id: {{ app.application_id }}
+application_type: {{ app.application_type }}
+expected_judgement: {{ app.expected_judgement }}
+expected_policy_ids:
+{% for policy_id in app.expected_policy_ids %}  - {{ policy_id }}
+{% endfor %}
+customer_name: {{ app.customer_name }}
+customer_id: {{ app.customer_id }}
+email: {{ app.email }}
+phone: {{ app.phone }}
+address: {{ app.address }}
+age_band: {{ app.age_band }}
+employer: {{ app.employer }}
+annual_income: {{ app.annual_income }}
+product: {{ app.product }}
+---
+
+# Client application {{ app.application_id }}
+
+This file is a synthetic demo client application. It is not a real borrower record and is not a production credit decision.
+
+## Applicant
+
+- Name: {{ app.customer_name }}
+- Customer id: {{ app.customer_id }}
+- Address: {{ app.address }}
+- Age band: {{ app.age_band }}
+- Employer: {{ app.employer }}
+- Annual income: {{ app.annual_income }}
+- Email: {{ app.email }}
+- Phone: {{ app.phone }}
+
+## Product
+
+{{ app.product }}
+
+## Facility
+
+{% for key, value in app.facility.items() -%}
+- {{ key }}: {{ value }}
+{% endfor %}
+
+{% if app.missing_items %}
+## Missing items
+
+{% for item in app.missing_items -%}
+- {{ item }}
+{% endfor %}
+{% endif %}
+
+## Narrative
+
+{{ app.narrative }}

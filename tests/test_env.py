@@ -240,6 +240,8 @@ def test_gitignore_lists_dotenv_and_tfstate(repo_root: Path) -> None:
     assert "*.tfstate" in lines
     assert "infra/outputs.json" in lines
     assert ".terraform/" in lines
+    assert "data/client-applications/*.md" in lines
+    assert "data/client-applications/manifest.json" in lines
 
 
 def test_env_example_is_not_committed(repo_root: Path) -> None:

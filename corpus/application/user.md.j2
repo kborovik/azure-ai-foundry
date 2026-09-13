@@ -1,0 +1,55 @@
+Generate one unique ClientApplication JSON object.
+
+Required values (use exactly):
+- application_type: {{ application_type }}
+- expected_judgement: {{ application_type }}
+- application_id: {{ application_id }}
+- customer_id: {{ customer_id }}
+- watermark context: {{ watermark }}
+
+Already-used identities (do not reuse):
+{% for item in used_identities -%}
+- {{ item }}
+{% else -%}
+- (none)
+{% endfor %}
+
+JSON schema:
+{{ schema }}
+
+Policy facts.yaml (verbatim literals; drive the facility numbers):
+{{ facts_yaml }}
+
+Type block:
+{% if application_type == "accepted" %}
+Write an owner-occupied residential mortgage that CLEARS published policy.
+- occupancy owner-occupied
+- LTV strictly below max_ltv_owner_occupied (80%)
+- DTI strictly below max_dti_residential (43%)
+- credit_score at least min_credit_score_residential (680)
+- wage earner with last 2 pay stubs and W-2 on file
+- missing_items must be []
+- expected_policy_ids must include CP-RML-2026-01 and CP-DOC-2026-01
+{% elif application_type == "rejected" %}
+Write an owner-occupied residential mortgage that BREACHES published LTV policy.
+- occupancy owner-occupied
+- LTV above max_ltv_owner_occupied (80%), for example 88%
+- other fields may be ordinary
+- missing_items must be []
+- expected_policy_ids must include CP-RML-2026-01
+- narrative must state the LTV figure and that it exceeds 80%
+{% else %}
+Write a self-employed applicant whose facility numbers can clear policy but documentation is incomplete.
+- missing_items must list the absent items, including "2 years tax returns"
+- expected_policy_ids must include CP-DOC-2026-01
+- do not invent the missing documents as present
+{% endif %}
+
+{% if previous_errors %}
+The previous JSON failed validation. Fix every item:
+{% for err in previous_errors -%}
+- {{ err }}
+{% endfor %}
+{% endif %}
+
+Return JSON only.

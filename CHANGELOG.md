@@ -17,6 +17,7 @@
 
 ### Added
 
+- **`talos generate application`:** Foundry `gpt-5-mini` emits a unique SyntheticBorrower (`--type` or `--all`; `--force` overwrites a slot). Validate+one retry. Gitignore `data/client-applications/*.md` and `manifest.json`. Optional blob hash-skip. Does not PUT knowledge sources.
 - **`gmake infra-plan`:** `terraform plan` in `infra/` with `-var-file=<env>.tfvars` after `infra-init` (`ENV=dev1|prd1`). Does not write `infra/outputs.json`.
 - **`gmake infra-backend-create` / `infra-backend-show` / `infra-backend-destroy` / `infra-destroy`:** bootstrap the tfstate account via Azure CLI (fixed name `sttfstlab5`, never workload `stcp*`); show or destroy the workload stack or the backend resource group. Standing workload `terraform init` uses `-reconfigure`.
 - **`gmake infra-create` / `infra-show`:** check `az` auth, `terraform -chdir=infra init`, then `terraform apply` or `terraform show` with `location=swedencentral`.
