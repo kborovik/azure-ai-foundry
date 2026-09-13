@@ -6,7 +6,7 @@ A Foundry Agent Service prompt agent that answers credit-policy questions from a
 
 Relationship managers and credit officers need a cited answer to questions such as “what is max LTV on an investment property?” during a live deal. Today that means paging through policy PDFs. Generic chat models invent LTV, DTI, and committee names.
 
-This repository is a **demo**, not a production credit system. It shows a Foundry Agent Service prompt agent grounded on a Foundry IQ knowledge base. The source of truth is twelve synthetic bank credit-policy Markdown files in Azure Blob Storage, dual-written locally so a presenter can open them. End users chat with the agent in Microsoft Teams 1:1.
+This repository is a **demo**, not a production credit system. It shows a Foundry Agent Service prompt agent grounded on a Foundry IQ knowledge base. The source of truth is twelve synthetic bank credit-policy Markdown files plus three gitignored synthetic client applications in Azure Blob Storage. End users chat with the agent in Microsoft Teams 1:1 for policy questions and application evaluation by `application_id` or `customer_name`.
 
 ## Runtime Sequence
 
@@ -76,9 +76,16 @@ terraform -chdir=infra apply -var-file=dev1.tfvars
 ```bash
 uv python pin 3.14 && uv python install 3.14   # once per clone
 uv run talos --help
-uv run talos generate --help
+uv run talos generate --help                  # group; bare command exits 2
+uv run talos generate policy --local-only
+uv run talos generate application --all --local-only
 uv run talos deploy --help
+uv run talos deploy --wait                    # blob-sync both corpora, two KS, two indexers
 ```
+
+`talos generate` is a Click group. `talos generate policy` renders the committed 12 policy files and does not run deploy. `talos generate application` calls Foundry `gpt-5-mini` for a unique SyntheticBorrower (`--type` or `--all`; `--force` to overwrite a slot). Generated applications under `data/client-applications/` are gitignored. `talos deploy` hash-skips blob upload of both local corpora, PUTs `ks-credit-policies` and `ks-client-applications`, runs both indexers, and PUTs `kb-credit-policies` with both sources.
+
+Teams publish is Just you. See [docs/teams.md](docs/teams.md).
 
 ## GitHub Actions
 

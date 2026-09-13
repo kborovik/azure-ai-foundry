@@ -4,6 +4,7 @@
 
 ### Changed
 
+- **Generate group:** `uv run talos generate` is a Click group (`policy`, `application`). Bare `talos generate` prints help and exits 2. `talos generate policy` is the existing policy render and does not run deploy.
 - **Standing terraform init:** `gmake infra-init` and README use `-reconfigure`, not `-migrate-state`. Remote azurerm state is already live. Reconstruct after clone with backend-config `key=<env>.tfstate`.
 - **Storage network:** `azurerm_storage_account` uses `public_network_access = "Enabled"` (string). Deprecated `public_network_access_enabled` is dropped on storage. Search and Foundry keep the bool attribute. AzureRM provider floor is `>= 5.5.0`.
 - **Env fill:** `gmake infra-create` writes `infra/outputs.json` (`terraform output -json` shape). Talos and pytest fill missing canonical env from that file unless `--no-terraform`. They never spawn `terraform output`. `gmake infra-destroy` drops the file. The file is gitignored.

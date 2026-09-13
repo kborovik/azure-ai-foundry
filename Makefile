@@ -53,7 +53,7 @@ rwildcard = $(strip \
 
 default: help
 
-.PHONY: help check generate deploy
+.PHONY: help check generate deploy infra infra-backend
 .PHONY: infra-create infra-plan infra-fmt infra-validate infra-show infra-destroy infra infra-init
 .PHONY: infra-backend-create infra-backend-show infra-backend-destroy infra-backend
 .PHONY: e2e clean preflight release major minor patch
@@ -71,7 +71,7 @@ check: .venv ## Format check, lint, unit tests (no Azure)
 
 generate: .venv ## Render corpus locally (no Azure)
 	$(call header,Generating credit policies)
-	$(UV) run talos generate --local-only
+	$(UV) run talos generate policy --local-only
 
 deploy: .venv ## Provision Foundry IQ + agent (`talos deploy --wait`)
 	$(call need-terraform)
@@ -168,6 +168,12 @@ infra-create: infra-validate ## terraform apply in infra/; write infra/outputs.j
 
 infra-show: ## Show workload terraform state (ENV=dev1|prd1)
 	terraform -chdir=infra show -no-color -var-file=$(ENV).tfvars | bat --language Terraform
+
+infra:
+	$(error use gmake infra-create)
+
+infra-backend:
+	$(error use gmake infra-backend-create)
 
 infra-destroy: infra-init ## terraform destroy workload stack; drop infra/outputs.json (ENV=dev1|prd1)
 	$(call header,Terraform destroy $(ENV))
