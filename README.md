@@ -51,8 +51,16 @@ Equivalent:
 az login
 export ARM_SUBSCRIPTION_ID=<subscription>
 export ARM_USE_AZUREAD=true
-terraform -chdir=infra/backend init
-terraform -chdir=infra/backend apply
+# account = sttfst + md5("{subscription_id}-tfstate")[:13]
+az group create --name rg-credit-policy-tfstate --location swedencentral
+az storage account create --name <tfstate-account> \
+  --resource-group rg-credit-policy-tfstate --location swedencentral \
+  --sku Standard_LRS --kind StorageV2 --min-tls-version TLS1_2 \
+  --allow-blob-public-access false --https-only true
+az storage container create --name tfstate --account-name <tfstate-account>
+az role assignment create --role "Storage Blob Data Contributor" \
+  --assignee <operator-object-id> \
+  --scope /subscriptions/<subscription>/resourceGroups/rg-credit-policy-tfstate/providers/Microsoft.Storage/storageAccounts/<tfstate-account>
 terraform -chdir=infra init -migrate-state \
   -backend-config="storage_account_name=<tfstate-account>" \
   -backend-config="key=dev1.tfstate"

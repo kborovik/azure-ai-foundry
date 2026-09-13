@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from pathlib import Path
 
@@ -34,22 +35,21 @@ def _infra_dir() -> Path:
 
 
 def _tf_files() -> list[Path]:
-    infra = _infra_dir()
-    return sorted([*infra.glob("*.tf"), *infra.glob("backend/*.tf")])
-
-
-def _backend_dir() -> Path:
-    return _infra_dir() / "backend"
-
-
-def _all_backend_tf() -> str:
-    return "\n".join(
-        path.read_text(encoding="utf-8") for path in sorted(_backend_dir().glob("*.tf"))
-    )
+    return sorted(_infra_dir().glob("*.tf"))
 
 
 def _all_tf() -> str:
     return "\n".join(path.read_text(encoding="utf-8") for path in _tf_files())
+
+
+def _makefile_recipe(makefile: str, target: str) -> str:
+    match = re.search(
+        rf"^{re.escape(target)}:[^\n]*\n((?:[ \t].*\n)*)",
+        makefile,
+        re.M,
+    )
+    assert match is not None, target
+    return match.group(1)
 
 
 def _read(name: str) -> str:
@@ -263,15 +263,41 @@ def test_azurerm_backend_uses_azuread() -> None:
     )
 
 
-def test_backend_bootstrap_rg_container_not_workload_storage() -> None:
-    assert _backend_dir().is_dir()
-    text = _all_backend_tf()
-    assert "rg-credit-policy-tfstate" in text
-    assert re.search(r'name\s*=\s*"tfstate"', text)
-    assert "sttfst" in text
-    assert "stcp${" not in text
-    assert re.search(r'name\s*=\s*"stcp', text) is None
-    assert "azurerm_application_insights" not in text
+def test_backend_bootstrap_uses_az_cli_not_terraform(repo_root: Path) -> None:
+    assert not (repo_root / "infra" / "backend").exists()
+    makefile = (repo_root / "Makefile").read_text(encoding="utf-8")
+    assert "terraform -chdir=infra/backend" not in makefile
+    create = _makefile_recipe(makefile, "infra-backend-create")
+    show = _makefile_recipe(makefile, "infra-backend-show")
+    destroy = _makefile_recipe(makefile, "infra-backend-destroy")
+    assert "need-terraform" not in create
+    assert "need-terraform" not in show
+    assert "need-terraform" not in destroy
+    assert "az group create" in create
+    assert "az storage account create" in create
+    assert "az storage container create" in create
+    assert "Storage Blob Data Contributor" in create
+    assert "sttfst" in makefile
+    assert "hashlib.md5" in makefile
+    assert "hexdigest()[:13]" in makefile
+    assert "-tfstate" in makefile
+    assert "stcp${" not in makefile
+    assert "az group show" in show
+    assert "az storage account show" in show
+    assert "az group delete" in destroy
+    gitignore = (repo_root / ".gitignore").read_text(encoding="utf-8")
+    assert "*.tfstate" in gitignore
+    assert "*.tfstate.*" in gitignore
+
+
+def test_tfstate_account_name_is_sttfst_plus_md5_prefix() -> None:
+    subscription_id = "f298e323-efae-4203-ba61-fc3496190479"
+    digest = hashlib.md5(f"{subscription_id}-tfstate".encode()).hexdigest()[:13]
+    name = f"sttfst{digest}"
+    assert name.startswith("sttfst")
+    assert not name.startswith("stcp")
+    assert len(name) == 19
+    assert re.fullmatch(r"sttfst[0-9a-f]{13}", name)
 
 
 def test_makefile_migrate_state_and_backend_key(repo_root: Path) -> None:

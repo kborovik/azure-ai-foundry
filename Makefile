@@ -39,8 +39,13 @@ ENV ?= dev1
 AZURE_LOCATION ?= swedencentral
 AZURE_SUBSCRIPTION_ID ?= f298e323-efae-4203-ba61-fc3496190479
 TFSTATE_RG := rg-credit-policy-tfstate
+TFSTATE_CONTAINER := tfstate
 export ARM_SUBSCRIPTION_ID ?= $(AZURE_SUBSCRIPTION_ID)
 export ARM_USE_AZUREAD := true
+
+# Reconstructible after clone: sttfst + md5("{subscription_id}-tfstate")[:13]
+# Never workload stcp*. python3 hashlib.md5 matches terraform md5().
+tfstate-account = sttfst$$(python3 -c "import hashlib,sys; print(hashlib.md5((sys.argv[1]+'-tfstate').encode()).hexdigest()[:13])" "$(AZURE_SUBSCRIPTION_ID)")
 
 need-env = $(if $(filter $(ENV),$(ALLOWED_ENVS)),,$(error ENV must be dev1 or prd1 (got $(ENV))))
 
@@ -86,36 +91,58 @@ preflight: .venv ## Read-only az / terraform session check
 
 infra-backend-create: ## Create remote-state RG + storage (once)
 	$(call need-az)
-	$(call need-terraform)
 	$(call need-az-auth)
 	$(call header,Checking az auth)
 	az account show --query name -o tsv
-	$(call header,Terraform apply tfstate backend $(AZURE_LOCATION))
-	terraform -chdir=infra/backend init -input=false
-	terraform -chdir=infra/backend apply -input=false -auto-approve \
-		-var='location=$(AZURE_LOCATION)'
+	$(call header,Creating tfstate backend $(AZURE_LOCATION))
+	account=$(tfstate-account); \
+	az group create --name $(TFSTATE_RG) --location $(AZURE_LOCATION) \
+		--tags environment=tfstate project=credit-policy-agent \
+		--output none; \
+	az storage account create \
+		--name $$account \
+		--resource-group $(TFSTATE_RG) \
+		--location $(AZURE_LOCATION) \
+		--sku Standard_LRS \
+		--kind StorageV2 \
+		--min-tls-version TLS1_2 \
+		--allow-blob-public-access false \
+		--https-only true \
+		--access-tier Hot \
+		--tags environment=tfstate project=credit-policy-agent \
+		--output none; \
+	az storage container create \
+		--name $(TFSTATE_CONTAINER) \
+		--account-name $$account \
+		--public-access off \
+		--output none; \
+	scope=$$(az storage account show --name $$account --resource-group $(TFSTATE_RG) --query id -o tsv); \
+	principal=$$(az ad signed-in-user show --query id -o tsv 2>/dev/null || az ad sp show --id "$$(az account show --query user.name -o tsv)" --query id -o tsv); \
+	existing=$$(az role assignment list --assignee $$principal --scope $$scope --role "Storage Blob Data Contributor" --query "[0].id" -o tsv); \
+	if [ -z "$$existing" ]; then \
+	  az role assignment create --assignee $$principal --role "Storage Blob Data Contributor" --scope $$scope --output none; \
+	fi; \
+	echo "tfstate account $$account"
 
-infra-backend-show: ## Show remote-state terraform state
+infra-backend-show: ## Show remote-state RG + storage
 	$(call need-az)
-	$(call need-terraform)
 	$(call need-az-auth)
-	$(call header,Terraform show tfstate backend)
-	terraform -chdir=infra/backend init -input=false
-	terraform -chdir=infra/backend show
+	$(call header,Showing tfstate backend)
+	account=$(tfstate-account); \
+	az group show --name $(TFSTATE_RG); \
+	az storage account show --name $$account --resource-group $(TFSTATE_RG)
 
 infra-backend-destroy: ## Destroy remote-state RG + storage
 	$(call need-az)
-	$(call need-terraform)
 	$(call need-az-auth)
-	$(call header,Terraform destroy tfstate backend)
-	terraform -chdir=infra/backend init -input=false
-	terraform -chdir=infra/backend destroy -input=false -auto-approve \
-		-var='location=$(AZURE_LOCATION)'
+	$(call header,Deleting tfstate backend)
+	az group delete --name $(TFSTATE_RG) --yes
 
 # Local terraform.tfstate → azurerm: -migrate-state. Later inits / ENV switch: -reconfigure (do not copy state between keys).
 define init-remote
-	account=$$(az storage account list -g $(TFSTATE_RG) --query "[?starts_with(name, 'sttfst')].name | [0]" -o tsv); \
-	test -n "$$account" || { echo "backend storage missing — run: gmake infra-backend-create" >&2; exit 1; }; \
+	account=$(tfstate-account); \
+	az storage account show --name $$account --resource-group $(TFSTATE_RG) --output none \
+	  || { echo "backend storage missing — run: gmake infra-backend-create" >&2; exit 1; }; \
 	if [ -f infra/terraform.tfstate ]; then \
 	  terraform -chdir=infra init -input=false -migrate-state -force-copy \
 	    -backend-config="storage_account_name=$$account" \

@@ -85,7 +85,7 @@ T10|x|load repo-root .env for missing canonical env in talos+pytest; flags>proce
 T11|x|drop `.env` load from talos+pytest; flags>process>azd; drop `.env.example`; keep gitignore `.env`|V15,V17,I.env,I.cmd,I.pytest
 T12|x|swap azd+Bicep → terraform CLI; drop azure.yaml; env fill `terraform -chdir=infra output -json`; flag `--no-terraform`|V11,V15,V23,I.infra,I.env,I.cmd
 T13|x|add azurerm backend + bootstrap; migrate-state; `infra/dev1.tfvars`+`prd1.tfvars`; drop credit-policy-demo; Makefile ENV∈{dev1,prd1}; GHA release prd1|V29,V30,I.infra,I.names
-T14|.|swap infra-backend-* terraform → az CLI; drop `infra/backend/`|V30,I.infra
+T14|x|swap infra-backend-* terraform → az CLI; drop `infra/backend/`|V30,I.infra
 
 ## §B BUGS
 
