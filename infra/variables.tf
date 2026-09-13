@@ -1,11 +1,11 @@
 variable "environment_name" {
   type        = string
-  description = "Environment name used in the resource group rg-credit-policy-<env>."
-  default     = "credit-policy-demo"
+  description = "Environment name used in the resource group rg-credit-policy-<env>. Must be dev1 or prd1."
+  default     = "dev1"
 
   validation {
-    condition     = length(var.environment_name) >= 1 && length(var.environment_name) <= 64
-    error_message = "environment_name must be 1-64 characters."
+    condition     = contains(["dev1", "prd1"], var.environment_name)
+    error_message = "environment_name must be dev1 or prd1."
   }
 }
 

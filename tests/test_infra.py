@@ -34,7 +34,18 @@ def _infra_dir() -> Path:
 
 
 def _tf_files() -> list[Path]:
-    return sorted(_infra_dir().glob("*.tf"))
+    infra = _infra_dir()
+    return sorted([*infra.glob("*.tf"), *infra.glob("backend/*.tf")])
+
+
+def _backend_dir() -> Path:
+    return _infra_dir() / "backend"
+
+
+def _all_backend_tf() -> str:
+    return "\n".join(
+        path.read_text(encoding="utf-8") for path in sorted(_backend_dir().glob("*.tf"))
+    )
 
 
 def _all_tf() -> str:
@@ -195,3 +206,72 @@ def test_no_application_insights() -> None:
         "application_insights",
     ):
         assert banned.lower() not in text.lower(), banned
+
+
+def test_environment_name_only_dev1_or_prd1() -> None:
+    variables = _read("variables.tf")
+    env_block = variables.split('variable "location"', 1)[0]
+    assert 'variable "environment_name"' in env_block
+    assert "credit-policy-demo" not in env_block
+    assert re.search(
+        r'contains\(\s*\["dev1",\s*"prd1"\]\s*,\s*var\.environment_name\)', env_block
+    )
+    assert re.search(r'default\s*=\s*"dev1"', env_block)
+
+
+def test_tfvars_files_for_dev1_and_prd1() -> None:
+    for env in ("dev1", "prd1"):
+        text = _read(f"{env}.tfvars")
+        assert f'environment_name = "{env}"' in text
+        assert "credit-policy-demo" not in text
+        assert 'location         = "swedencentral"' in text or re.search(
+            r'location\s*=\s*"swedencentral"', text
+        )
+
+
+def test_makefile_env_and_var_file(repo_root: Path) -> None:
+    makefile = (repo_root / "Makefile").read_text(encoding="utf-8")
+    assert "ENV ?= dev1" in makefile
+    assert "ENV ?= credit-policy-demo" not in makefile
+    assert "ALLOWED_ENVS := dev1 prd1" in makefile
+    assert "-var-file=$(ENV).tfvars" in makefile
+    assert "need-env" in makefile
+    assert "infra-backend" in makefile
+    assert "infra-backend-destroy" in makefile
+    assert "infra-destroy" in makefile
+
+
+def test_gha_release_uses_prd1_backend_key(repo_root: Path) -> None:
+    text = (repo_root / ".github/workflows/deploy.yml").read_text(encoding="utf-8")
+    assert "key=prd1.tfstate" in text
+    assert "rg-credit-policy-tfstate" in text
+    assert "ARM_USE_AZUREAD" in text
+
+
+def test_azurerm_backend_uses_azuread() -> None:
+    versions = _read("versions.tf")
+    assert 'backend "azurerm"' in versions
+    assert "use_azuread_auth" in versions
+    assert "rg-credit-policy-tfstate" in versions
+    assert 'container_name      = "tfstate"' in versions or re.search(
+        r'container_name\s*=\s*"tfstate"', versions
+    )
+
+
+def test_backend_bootstrap_rg_container_not_workload_storage() -> None:
+    assert _backend_dir().is_dir()
+    text = _all_backend_tf()
+    assert "rg-credit-policy-tfstate" in text
+    assert re.search(r'name\s*=\s*"tfstate"', text)
+    assert "sttfst" in text
+    assert "stcp${" not in text
+    assert re.search(r'name\s*=\s*"stcp', text) is None
+    assert "azurerm_application_insights" not in text
+
+
+def test_makefile_migrate_state_and_backend_key(repo_root: Path) -> None:
+    makefile = (repo_root / "Makefile").read_text(encoding="utf-8")
+    assert "-migrate-state" in makefile
+    assert "key=$(ENV).tfstate" in makefile
+    assert "sttfst" in makefile
+    assert "rg-credit-policy-tfstate" in makefile

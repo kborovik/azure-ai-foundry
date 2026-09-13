@@ -17,6 +17,7 @@ jobs:
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      ARM_USE_AZUREAD: true
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
@@ -35,7 +36,15 @@ jobs:
         with:
           terraform_wrapper: false
       - name: Terraform init
-        run: terraform -chdir=infra init -input=false
+        run: |
+          ACCOUNT=$(az storage account list \
+            --resource-group rg-credit-policy-tfstate \
+            --query "[?starts_with(name, 'sttfst')].name | [0]" \
+            -o tsv)
+          test -n "$ACCOUNT"
+          terraform -chdir=infra init -input=false -reconfigure \
+            -backend-config="storage_account_name=${ACCOUNT}" \
+            -backend-config="key=prd1.tfstate"
       - name: Deploy Foundry IQ and agent
         run: uv run talos deploy --wait
       - name: Run live tests

@@ -34,10 +34,15 @@ need-gh-auth = $(if $(dry-run),,$(shell gh auth status >/dev/null 2>&1)$(if $(fi
 need-clean = $(if $(dry-run),,$(if $(shell git status --porcelain),$(error working tree not clean — commit or stash first)))
 need-part = $(if $(part),,$(error usage: gmake release major|minor|patch))
 
-ENV ?= credit-policy-demo
+ALLOWED_ENVS := dev1 prd1
+ENV ?= dev1
 AZURE_LOCATION ?= swedencentral
 AZURE_SUBSCRIPTION_ID ?= f298e323-efae-4203-ba61-fc3496190479
+TFSTATE_RG := rg-credit-policy-tfstate
 export ARM_SUBSCRIPTION_ID ?= $(AZURE_SUBSCRIPTION_ID)
+export ARM_USE_AZUREAD := true
+
+need-env = $(if $(filter $(ENV),$(ALLOWED_ENVS)),,$(error ENV must be dev1 or prd1 (got $(ENV))))
 
 # Recursive glob. `*` skips dot-dirs (.git, .venv).
 rwildcard = $(strip \
@@ -46,7 +51,8 @@ rwildcard = $(strip \
 
 default: help
 
-.PHONY: help check generate deploy infra e2e clean preflight release major minor patch
+.PHONY: help check generate deploy infra infra-backend infra-backend-destroy infra-destroy
+.PHONY: e2e clean preflight release major minor patch
 .PHONY: _release-pre _release-bump _release-tag _release-gh
 
 ###############################################################################
@@ -76,17 +82,64 @@ preflight: .venv ## Read-only az / terraform session check
 	az account show --query name -o tsv
 	terraform version
 
-infra: ## terraform apply in infra/
+infra-backend: ## Create remote-state RG + storage (once)
+	$(call need-az)
+	$(call need-terraform)
+	$(call need-az-auth)
+	$(call header,Checking az auth)
+	az account show --query name -o tsv
+	$(call header,Terraform apply tfstate backend $(AZURE_LOCATION))
+	terraform -chdir=infra/backend init -input=false
+	terraform -chdir=infra/backend apply -input=false -auto-approve \
+		-var='location=$(AZURE_LOCATION)'
+
+infra-backend-destroy: ## Destroy remote-state RG + storage
+	$(call need-az)
+	$(call need-terraform)
+	$(call need-az-auth)
+	$(call header,Terraform destroy tfstate backend)
+	terraform -chdir=infra/backend init -input=false
+	terraform -chdir=infra/backend destroy -input=false -auto-approve \
+		-var='location=$(AZURE_LOCATION)'
+
+# Local terraform.tfstate → azurerm: -migrate-state. Later inits / ENV switch: -reconfigure (do not copy state between keys).
+define init-remote
+	account=$$(az storage account list -g $(TFSTATE_RG) --query "[?starts_with(name, 'sttfst')].name | [0]" -o tsv); \
+	test -n "$$account" || { echo "backend storage missing — run: gmake infra-backend" >&2; exit 1; }; \
+	if [ -f infra/terraform.tfstate ]; then \
+	  terraform -chdir=infra init -input=false -migrate-state -force-copy \
+	    -backend-config="storage_account_name=$$account" \
+	    -backend-config="key=$(ENV).tfstate"; \
+	else \
+	  terraform -chdir=infra init -input=false -reconfigure \
+	    -backend-config="storage_account_name=$$account" \
+	    -backend-config="key=$(ENV).tfstate"; \
+	fi
+endef
+
+infra: ## terraform apply in infra/ (ENV=dev1|prd1, default dev1)
+	$(call need-env)
 	$(call need-az)
 	$(call need-terraform)
 	$(call need-az-auth)
 	$(call header,Checking az auth)
 	az account show --query name -o tsv
 	$(call header,Terraform apply $(ENV) $(AZURE_LOCATION))
-	terraform -chdir=infra init -input=false
+	$(init-remote)
 	terraform -chdir=infra apply -input=false -auto-approve \
-		-var='location=$(AZURE_LOCATION)' \
-		-var='environment_name=$(ENV)'
+		-var-file=$(ENV).tfvars \
+		-var='location=$(AZURE_LOCATION)'
+
+infra-destroy: ## terraform destroy workload stack (ENV=dev1|prd1)
+	$(call need-env)
+	$(call need-az)
+	$(call need-terraform)
+	$(call need-az-auth)
+	$(call header,Terraform destroy $(ENV))
+	$(init-remote)
+	terraform -chdir=infra destroy -input=false -auto-approve \
+		-var-file=$(ENV).tfvars \
+		-var='location=$(AZURE_LOCATION)'
 
 # `gmake e2e FILE=<path-or-stem>` scopes to one test file; unset = live markers.
 e2e_target := $(if $(FILE),$(firstword $(wildcard $(FILE) tests/$(FILE) tests/$(FILE).py)),)
