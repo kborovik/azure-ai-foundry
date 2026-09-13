@@ -35,7 +35,7 @@ need-gh-auth = $(if $(dry-run),,$(shell gh auth status >/dev/null 2>&1)$(if $(fi
 need-clean = $(if $(dry-run),,$(if $(shell git status --porcelain),$(error working tree not clean — commit or stash first)))
 need-part = $(if $(part),,$(error usage: gmake release major|minor|patch))
 
-AZD_ENV ?= dev
+AZD_ENV ?= credit-policy-demo
 AZURE_LOCATION ?= swedencentral
 AZURE_SUBSCRIPTION_ID ?= f298e323-efae-4203-ba61-fc3496190479
 

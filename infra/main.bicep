@@ -35,9 +35,9 @@ var tags = {
 }
 
 var resourceGroupName = 'rg-credit-policy-${environmentName}'
-var storageName = 'stcp${resourceToken}'
-var searchName = 'srch-cp-${resourceToken}'
-var foundryName = 'aif-cp-${resourceToken}'
+var storageName = 'credit${resourceToken}'
+var searchName = 'ai-search-${resourceToken}'
+var foundryName = 'ai-foundry-${resourceToken}'
 var projectName = 'credit-policy-demo'
 var containerName = 'credit-policies'
 
