@@ -80,7 +80,7 @@ T7|.|add live pytest markers ingestion retrieval agent|V1,V3,V19,V20,I.pytest
 T8|.|add Teams Just-you runbook + teams marker skip unless E2E_TEAMS=1; sideload fallback|V16,V18,V20,I.agent
 T9|.|optional talos publish REST + hosted-agent spike doc|V4,V18,I.cmd
 T10|x|load repo-root .env for missing canonical env in talos+pytest; flags>process>.env>azd; gitignore .env|V15,V17,I.env,I.cmd,I.pytest
-T11|.|drop `.env` load from talos+pytest; flags>process>azd; drop `.env.example`; keep gitignore `.env`|V15,V17,I.env,I.cmd,I.pytest
+T11|x|drop `.env` load from talos+pytest; flags>process>azd; drop `.env.example`; keep gitignore `.env`|V15,V17,I.env,I.cmd,I.pytest
 
 ## §B BUGS
 

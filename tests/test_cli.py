@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import tomllib
+from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
@@ -120,22 +121,28 @@ def test_deploy_reads_canonical_env_without_flags(
     assert f"search: {SEARCH}" in result.output
 
 
-def test_deploy_dry_run_reads_dotenv_with_no_azd(
-    clean_azure_env: None, monkeypatch: pytest.MonkeyPatch
+def test_deploy_no_azd_does_not_read_dotenv(
+    clean_azure_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setattr(
-        "talos.env.load_dotenv_file",
-        lambda path=None: {
-            "AZURE_SEARCH_ENDPOINT": SEARCH,
-            "AZURE_AI_PROJECT_ENDPOINT": PROJECT,
-            "AZURE_AI_PROJECT_RESOURCE_ID": PROJECT_ID,
-            "AZURE_STORAGE_RESOURCE_ID": STORAGE_ID,
-            "AZURE_AI_SERVICES_ENDPOINT": AI_SERVICES,
-        },
+    dotenv = tmp_path / ".env"
+    dotenv.write_text(
+        "\n".join(
+            [
+                f"AZURE_SEARCH_ENDPOINT={SEARCH}",
+                f"AZURE_AI_PROJECT_ENDPOINT={PROJECT}",
+                f"AZURE_AI_PROJECT_RESOURCE_ID={PROJECT_ID}",
+                f"AZURE_STORAGE_RESOURCE_ID={STORAGE_ID}",
+                f"AZURE_AI_SERVICES_ENDPOINT={AI_SERVICES}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
     )
+    monkeypatch.setattr("talos.env.repo_root", lambda: tmp_path)
+    monkeypatch.chdir(tmp_path)
     result = CliRunner().invoke(cli, ["deploy", "--dry-run", "--no-azd"])
-    assert result.exit_code == 0, result.output
-    assert f"search: {SEARCH}" in result.output
+    assert result.exit_code == 2
+    assert "Azure environment is not configured" in result.output
 
 
 def test_test_command_forwards_args(monkeypatch: pytest.MonkeyPatch) -> None:

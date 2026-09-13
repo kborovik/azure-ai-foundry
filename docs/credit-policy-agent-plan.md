@@ -1037,7 +1037,7 @@ Default `uv run pytest` (and `uv run talos test`) inherit `addopts = "-m unit"`.
 | `project_client` | session | `AIProjectClient` |
 | `agent_name` | session | `credit-policy-agent` |
 
-Secrets: **never** in git. Use `az login` or GitHub OIDC. Optional `.env` loaded only if `python-dotenv` present and file exists; `.env` is gitignored. `talos generate` / `talos deploy` call `azd env get-values` for missing canonical names (quotes stripped). Bash may still `eval "$(azd env get-values)"` for pytest; fish should not `| source` dotenv. Canonical names are listed in **Env contract**.
+Secrets: **never** in git. Use `az login` or GitHub OIDC. Stray `.env` is gitignored and is never loaded. `talos generate` / `talos deploy` call `azd env get-values` for missing canonical names (quotes stripped). Bash may still `eval "$(azd env get-values)"` for pytest; fish should not `| source` dotenv. Canonical names are listed in **Env contract**.
 
 ### Layer 1 — Corpus contract (`unit`)
 

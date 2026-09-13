@@ -50,14 +50,9 @@ azd env set AZURE_SUBSCRIPTION_ID <subscription>
 azd up
 ```
 
-`azd up` deploys the resource group, Storage, Search, Foundry, model deployments, and RBAC. It does not create Foundry IQ objects. 
+`azd up` deploys the resource group, Storage, Search, Foundry, model deployments, and RBAC. It does not create Foundry IQ objects.
 
-Copy outputs into gitignored `.env` 
-
-```bash
-cp .env.example .env
-azd env get-values   # paste into `.env`
-```
+`uv run talos generate` and `uv run talos deploy` fill missing canonical names from `azd env get-values` unless you pass `--no-azd`. CLI flags override process environment variables. A stray `.env` is gitignored and is not loaded.
 
 ## Talos CLI
 

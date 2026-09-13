@@ -4,6 +4,7 @@
 
 ### Changed
 
+- **Env load:** Talos and pytest no longer read repo-root `.env`. Missing keys come from process env, then `azd env get-values` unless `--no-azd`. `.env.example` is removed. `.gitignore` still lists `.env`.
 - **CI:** Bump GitHub Actions to Node.js 24 runtimes (`actions/checkout@v7`, `astral-sh/setup-uv` v10.1.0, `azure/login@v3`) so runners stop forcing Node 20.
 
 ### Added
