@@ -152,7 +152,7 @@ infra-create: infra-init ## terraform apply in infra/ (ENV=dev1|prd1, default de
 		-var-file=$(ENV).tfvars
 
 infra-show: ## Show workload terraform state (ENV=dev1|prd1)
-	terraform -chdir=infra show -no-color -var-file=$(ENV).tfvars
+	terraform -chdir=infra show -no-color -var-file=$(ENV).tfvars | bat --language Terraform
 
 infra:
 	$(error gmake infra renamed — use gmake infra-create)
