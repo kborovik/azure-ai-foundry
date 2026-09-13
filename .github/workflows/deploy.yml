@@ -37,13 +37,8 @@ jobs:
           terraform_wrapper: false
       - name: Terraform init
         run: |
-          ACCOUNT=$(az storage account list \
-            --resource-group rg-credit-policy-tfstate \
-            --query "[?starts_with(name, 'sttfst')].name | [0]" \
-            -o tsv)
-          test -n "$ACCOUNT"
           terraform -chdir=infra init -input=false -reconfigure \
-            -backend-config="storage_account_name=${ACCOUNT}" \
+            -backend-config="storage_account_name=sttfstlab5" \
             -backend-config="key=prd1.tfstate"
       - name: Deploy Foundry IQ and agent
         run: uv run talos deploy --wait

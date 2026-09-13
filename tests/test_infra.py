@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import re
 from pathlib import Path
 
@@ -249,7 +248,7 @@ def test_makefile_env_and_var_file(repo_root: Path) -> None:
 def test_gha_release_uses_prd1_backend_key(repo_root: Path) -> None:
     text = (repo_root / ".github/workflows/deploy.yml").read_text(encoding="utf-8")
     assert "key=prd1.tfstate" in text
-    assert "rg-credit-policy-tfstate" in text
+    assert "storage_account_name=sttfstlab5" in text
     assert "ARM_USE_AZUREAD" in text
 
 
@@ -277,10 +276,7 @@ def test_backend_bootstrap_uses_az_cli_not_terraform(repo_root: Path) -> None:
     assert "az storage account create" in create
     assert "az storage container create" in create
     assert "Storage Blob Data Contributor" in create
-    assert "sttfst" in makefile
-    assert "hashlib.md5" in makefile
-    assert "hexdigest()[:13]" in makefile
-    assert "-tfstate" in makefile
+    assert "TFSTATE_ACCOUNT := sttfstlab5" in makefile
     assert "stcp${" not in makefile
     assert "az group show" in show
     assert "az storage account show" in show
@@ -290,14 +286,16 @@ def test_backend_bootstrap_uses_az_cli_not_terraform(repo_root: Path) -> None:
     assert "*.tfstate.*" in gitignore
 
 
-def test_tfstate_account_name_is_sttfst_plus_md5_prefix() -> None:
-    subscription_id = "f298e323-efae-4203-ba61-fc3496190479"
-    digest = hashlib.md5(f"{subscription_id}-tfstate".encode()).hexdigest()[:13]
-    name = f"sttfst{digest}"
+def test_tfstate_account_name_is_fixed_sttfst_prefix(repo_root: Path) -> None:
+    makefile = (repo_root / "Makefile").read_text(encoding="utf-8")
+    match = re.search(r"^TFSTATE_ACCOUNT := (\S+)", makefile, re.M)
+    assert match is not None
+    name = match.group(1)
+    assert name == "sttfstlab5"
     assert name.startswith("sttfst")
     assert not name.startswith("stcp")
-    assert len(name) == 19
-    assert re.fullmatch(r"sttfst[0-9a-f]{13}", name)
+    assert 3 <= len(name) <= 24
+    assert name.isalnum() and name.islower()
 
 
 def test_makefile_migrate_state_and_backend_key(repo_root: Path) -> None:

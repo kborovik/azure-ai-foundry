@@ -4,7 +4,7 @@
 
 ### Changed
 
-- **Infra backend:** `gmake infra-backend-create` / `infra-backend-show` / `infra-backend-destroy` use Azure CLI (`az group create`, `az storage account create`, `az storage container create`, `az group show` / `az storage account show`, `az group delete`). Drop `infra/backend/` Terraform. Account name is `sttfst` plus the first 13 hex characters of MD5(`{subscription_id}-tfstate`). Operator gets Storage Blob Data Contributor on the account.
+- **Infra backend:** `gmake infra-backend-create` / `infra-backend-show` / `infra-backend-destroy` use Azure CLI (`az group create`, `az storage account create`, `az storage container create`, `az group show` / `az storage account show`, `az group delete`). Drop `infra/backend/` Terraform. Account name is the fixed string `sttfstlab5` (never workload `stcp*`). Operator gets Storage Blob Data Contributor on the account.
 - **Make recipes:** Rename `gmake infra` to `gmake infra-create` and `gmake infra-backend` to `gmake infra-backend-create`. Add `gmake infra-show` (`terraform show`) and `gmake infra-backend-show` (`az show`).
 - **Infra:** Remote azurerm state (Azure AD) in `rg-credit-policy-tfstate`. Apply uses `infra/dev1.tfvars` or `infra/prd1.tfvars`. Environment names are `dev1` and `prd1` only (`credit-policy-demo` dropped). `gmake infra-create` defaults to `ENV=dev1`. GitHub release init uses backend key `prd1.tfstate`.
 - **Infra:** Swap `azd` + Bicep for Terraform CLI in `infra/`. Drop `azure.yaml`. `gmake infra-create` runs `terraform apply`. Canonical outputs fill missing env via `terraform -chdir=infra output -json` unless `--no-terraform`. State files are gitignored.
@@ -13,7 +13,7 @@
 
 ### Added
 
-- **`gmake infra-backend-create` / `infra-backend-show` / `infra-backend-destroy` / `infra-destroy`:** bootstrap the tfstate account via Azure CLI (prefix `sttfst`, never workload `stcp*`); show or destroy the workload stack or the backend resource group. First workload `terraform init` uses `-migrate-state` when a local `infra/terraform.tfstate` exists.
+- **`gmake infra-backend-create` / `infra-backend-show` / `infra-backend-destroy` / `infra-destroy`:** bootstrap the tfstate account via Azure CLI (fixed name `sttfstlab5`, never workload `stcp*`); show or destroy the workload stack or the backend resource group. First workload `terraform init` uses `-migrate-state` when a local `infra/terraform.tfstate` exists.
 - **`gmake infra-create` / `infra-show`:** check `az` auth, `terraform -chdir=infra init`, then `terraform apply` or `terraform show` with `location=swedencentral`.
 - **Blob dual-write:** `uv run talos generate` uploads the 12 Markdown policies to container `credit-policies`. Skip uses blob metadata `content_sha256` (not Content-MD5). Auth is `AZURE_STORAGE_CONNECTION_STRING` if set, else `DefaultAzureCredential` + `AZURE_STORAGE_ACCOUNT_URL`.
 - **Infra:** Terraform provisions Storage, Azure AI Search Basic, a Foundry project with system-assigned MI, `gpt-5-mini` GlobalStandard (capacity 50), `text-embedding-3-large`, and RBAC. Default location `swedencentral`. Canonical outputs only.
