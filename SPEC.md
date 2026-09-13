@@ -79,7 +79,7 @@ T2|x|add talos generate local-only: facts.yaml, jinja templates, 12 MD + manifes
 T3|x|add corpus contract tests + 18 golden queries yaml|V5,V19,V20,I.pytest,I.golden
 T4|x|add azd+Bicep storage Search Basic Foundry project-MI models RBAC canonical outputs location swedencentral|V6,V8,V9,V11,V16,V17,V21,V23,I.infra,I.env,I.names
 T5|x|extend generate dual-write blobs content_sha256 skip|V5,V22,V26,I.cmd
-T6|.|prove live talos deploy blob-sync both corpora --wait both KS (policy ≥12, application ≥3) two indexers KB two sources ARM MCP agent temperature=0 version_selector merge-patch|V4,V7,V11,V12,V13,V14,V22,V24,I.cmd,I.search,I.kb,I.arm,I.agent
+T6|x|prove live talos deploy blob-sync both corpora --wait both KS (policy ≥12, application ≥3) two indexers KB two sources ARM MCP agent temperature=0 version_selector merge-patch|V4,V7,V11,V12,V13,V14,V22,V24,I.cmd,I.search,I.kb,I.arm,I.agent
 T7|.|add live pytest markers ingestion retrieval agent; evaluate-by-id, evaluate-by-name, ask-when-missing, one case per ApplicationType; unit fixtures `tests/fixtures/client-applications/`|V1,V3,V19,V20,V31,I.pytest
 T8|.|add Teams Just-you runbook + teams marker skip unless E2E_TEAMS=1; sideload fallback; evaluate-by-id and evaluate-by-name|V16,V18,V20,V31,I.agent
 T9|.|optional talos publish REST + hosted-agent spike doc|V4,V18,I.cmd

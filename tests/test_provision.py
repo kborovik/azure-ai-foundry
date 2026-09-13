@@ -15,7 +15,7 @@ from talos.provision import (
     run_deploy,
     synchronization_counts,
 )
-from tests.fakes import FakeAgents, FakeClock, FakeRest, json_response
+from tests.fakes import FakeAgents, FakeBlobStore, FakeClock, FakeRest, json_response
 
 pytestmark = pytest.mark.unit
 
@@ -47,9 +47,31 @@ def _config(tmp_path: Path, **overrides: object) -> DeployConfig:
         connection_retries=3,
         connection_retry_delay_seconds=1.0,
         min_indexed_items=12,
+        min_application_indexed_items=3,
+        policy_dir=tmp_path / "policies",
+        application_dir=tmp_path / "apps",
     )
     values.update(overrides)
+    Path(values["policy_dir"]).mkdir(parents=True, exist_ok=True)  # type: ignore[arg-type]
+    Path(values["application_dir"]).mkdir(parents=True, exist_ok=True)  # type: ignore[arg-type]
     return DeployConfig(**values)  # type: ignore[arg-type]
+
+
+def _stores() -> dict[str, FakeBlobStore]:
+    return {
+        "credit-policies": FakeBlobStore(container="credit-policies"),
+        "client-applications": FakeBlobStore(container="client-applications"),
+    }
+
+
+def do_deploy(config: DeployConfig, rest: FakeRest, **kwargs: object) -> None:
+    kwargs.setdefault("blob_stores", _stores())
+    kwargs.setdefault("clock", FakeClock())
+    kwargs.setdefault("echo", lambda _: None)
+    if "agents" not in kwargs:
+        kwargs["agents"] = FakeAgents()
+    _run = run_deploy
+    _run(config, rest=rest, **kwargs)  # type: ignore[arg-type]
 
 
 def _ks_get_body(indexer: str = "ks-credit-policies-indexer") -> dict:
@@ -59,28 +81,78 @@ def _ks_get_body(indexer: str = "ks-credit-policies-indexer") -> dict:
     }
 
 
-def _script_happy_path(
-    rest: FakeRest, *, wait: bool = False, indexer_status: dict | None = None
-) -> FakeRest:
+def _script_app_source(rest: FakeRest, *, run: bool = True) -> None:
     rest.expect(
-        "PUT",
-        "/knowledgesources/ks-credit-policies",
-        json_response(201, {"name": "ks-credit-policies"}),
+        "PUT", "/knowledgesources/ks-client-applications", json_response(201, {})
     )
     rest.expect(
         "GET",
-        "/knowledgesources/ks-credit-policies?",
-        json_response(200, _ks_get_body()),
+        "/knowledgesources/ks-client-applications?",
+        json_response(200, _ks_get_body("ks-client-applications-indexer")),
     )
+    if run:
+        rest.expect(
+            "POST",
+            "/indexers/ks-client-applications-indexer/run",
+            json_response(202, None),
+        )
+
+
+def _script_source(
+    rest: FakeRest,
+    *,
+    name: str,
+    indexer: str,
+    wait: bool = False,
+    indexer_status: dict | None = None,
+    processed: int = 12,
+) -> None:
+    rest.expect("PUT", f"/knowledgesources/{name}", json_response(201, {"name": name}))
     rest.expect(
-        "POST", "/indexers/ks-credit-policies-indexer/run", json_response(202, None)
+        "GET",
+        f"/knowledgesources/{name}?",
+        json_response(
+            200,
+            {
+                "name": name,
+                "azureBlobParameters": {"createdResources": {"indexer": indexer}},
+            },
+        ),
     )
+    rest.expect("POST", f"/indexers/{indexer}/run", json_response(202, None))
     if wait:
         rest.expect(
             "GET",
-            "/knowledgesources/ks-credit-policies/status",
-            json_response(200, indexer_status or _done_status(processed=12, failed=0)),
+            f"/knowledgesources/{name}/status",
+            json_response(
+                200, indexer_status or _done_status(processed=processed, failed=0)
+            ),
         )
+
+
+def _script_happy_path(
+    rest: FakeRest,
+    *,
+    wait: bool = False,
+    indexer_status: dict | None = None,
+    application_status: dict | None = None,
+) -> FakeRest:
+    _script_source(
+        rest,
+        name="ks-credit-policies",
+        indexer="ks-credit-policies-indexer",
+        wait=wait,
+        indexer_status=indexer_status,
+        processed=12,
+    )
+    _script_source(
+        rest,
+        name="ks-client-applications",
+        indexer="ks-client-applications-indexer",
+        wait=wait,
+        indexer_status=application_status,
+        processed=3,
+    )
     rest.expect(
         "PUT",
         "/knowledgebases/kb-credit-policies",
@@ -171,7 +243,7 @@ def test_dry_run_makes_no_rest_calls(tmp_path: Path) -> None:
     rest = FakeRest()
     agents = FakeAgents()
     logs: list[str] = []
-    run_deploy(
+    do_deploy(
         _config(tmp_path, dry_run=True), rest=rest, agents=agents, echo=logs.append
     )
     assert rest.calls == []
@@ -183,7 +255,7 @@ def test_happy_path_pins_version_when_activity_not_enabled(tmp_path: Path) -> No
     rest = _script_happy_path(FakeRest())
     agents = FakeAgents(version="4", agent={"agent_endpoint": {}})
     logs: list[str] = []
-    run_deploy(
+    do_deploy(
         _config(tmp_path), rest=rest, agents=agents, clock=FakeClock(), echo=logs.append
     )
     assert agents.created is not None
@@ -204,10 +276,11 @@ def test_skip_indexer_run(tmp_path: Path) -> None:
         "/knowledgesources/ks-credit-policies?",
         json_response(200, _ks_get_body()),
     )
+    _script_app_source(rest, run=False)
     rest.expect("PUT", "/knowledgebases/kb-credit-policies", json_response(201, {}))
     rest.expect("PUT", "/connections/conn-kb-credit-policies", json_response(200, {}))
     agents = FakeAgents()
-    run_deploy(
+    do_deploy(
         _config(tmp_path, skip_indexer_run=True),
         rest=rest,
         agents=agents,
@@ -233,9 +306,10 @@ def test_knowledge_source_retries_trailing_semicolon_on_400(tmp_path: Path) -> N
     rest.expect(
         "POST", "/indexers/ks-credit-policies-indexer/run", json_response(202, None)
     )
+    _script_app_source(rest)
     rest.expect("PUT", "/knowledgebases/kb-credit-policies", json_response(201, {}))
     rest.expect("PUT", "/connections/conn-kb-credit-policies", json_response(200, {}))
-    run_deploy(
+    do_deploy(
         _config(tmp_path),
         rest=rest,
         agents=FakeAgents(),
@@ -266,9 +340,10 @@ def test_indexer_409_is_treated_as_already_running(tmp_path: Path) -> None:
         "/indexers/ks-credit-policies-indexer/run",
         json_response(409, {"error": {"message": "running"}}),
     )
+    _script_app_source(rest)
     rest.expect("PUT", "/knowledgebases/kb-credit-policies", json_response(201, {}))
     rest.expect("PUT", "/connections/conn-kb-credit-policies", json_response(200, {}))
-    run_deploy(
+    do_deploy(
         _config(tmp_path),
         rest=rest,
         agents=FakeAgents(),
@@ -279,7 +354,7 @@ def test_indexer_409_is_treated_as_already_running(tmp_path: Path) -> None:
 
 def test_wait_succeeds_when_processed_and_no_failures(tmp_path: Path) -> None:
     rest = _script_happy_path(FakeRest(), wait=True)
-    run_deploy(
+    do_deploy(
         _config(tmp_path, wait=True),
         rest=rest,
         agents=FakeAgents(),
@@ -295,7 +370,7 @@ def test_wait_fails_on_failed_item_updates(tmp_path: Path) -> None:
         indexer_status=_done_status(processed=12, failed=1),
     )
     with pytest.raises(TalosError, match="failed item updates"):
-        run_deploy(
+        do_deploy(
             _config(tmp_path, wait=True),
             rest=rest,
             agents=FakeAgents(),
@@ -311,7 +386,7 @@ def test_wait_fails_when_processed_below_minimum(tmp_path: Path) -> None:
         indexer_status=_done_status(processed=3, failed=0),
     )
     with pytest.raises(TalosError, match="processed 3 items"):
-        run_deploy(
+        do_deploy(
             _config(tmp_path, wait=True),
             rest=rest,
             agents=FakeAgents(),
@@ -331,13 +406,14 @@ def test_wait_times_out_when_end_time_never_arrives(tmp_path: Path) -> None:
     rest.expect(
         "POST", "/indexers/ks-credit-policies-indexer/run", json_response(202, None)
     )
+    _script_app_source(rest)
     pending = json_response(
         200, {"currentSynchronizationState": {"itemUpdatesProcessed": 1}}
     )
     for _ in range(8):
         rest.expect("GET", "/knowledgesources/ks-credit-policies/status", pending)
     with pytest.raises(TalosError, match="timed out"):
-        run_deploy(
+        do_deploy(
             _config(
                 tmp_path,
                 wait=True,
@@ -356,7 +432,7 @@ def test_skip_endpoint_patch_when_activity_enabled(tmp_path: Path) -> None:
     agents = FakeAgents(
         agent={"agent_endpoint": {"protocol_configuration": {"activity": {}}}}
     )
-    run_deploy(
+    do_deploy(
         _config(tmp_path),
         rest=rest,
         agents=agents,
@@ -369,7 +445,7 @@ def test_skip_endpoint_patch_when_activity_enabled(tmp_path: Path) -> None:
 def test_skip_endpoint_patch_flag(tmp_path: Path) -> None:
     rest = _script_happy_path(FakeRest())
     agents = FakeAgents(agent={"agent_endpoint": {}})
-    run_deploy(
+    do_deploy(
         _config(tmp_path, skip_endpoint_patch=True),
         rest=rest,
         agents=agents,
@@ -390,6 +466,7 @@ def test_project_connection_retries_403(tmp_path: Path) -> None:
     rest.expect(
         "POST", "/indexers/ks-credit-policies-indexer/run", json_response(202, None)
     )
+    _script_app_source(rest)
     rest.expect("PUT", "/knowledgebases/kb-credit-policies", json_response(201, {}))
     rest.expect(
         "PUT",
@@ -398,7 +475,7 @@ def test_project_connection_retries_403(tmp_path: Path) -> None:
     )
     rest.expect("PUT", "/connections/conn-kb-credit-policies", json_response(200, {}))
     clock = FakeClock()
-    run_deploy(
+    do_deploy(
         _config(tmp_path),
         rest=rest,
         agents=FakeAgents(),
@@ -412,7 +489,7 @@ def test_project_connection_retries_403(tmp_path: Path) -> None:
 
 def test_knowledge_base_payload_uses_extractive_data(tmp_path: Path) -> None:
     rest = _script_happy_path(FakeRest())
-    run_deploy(
+    do_deploy(
         _config(tmp_path),
         rest=rest,
         agents=FakeAgents(),
@@ -422,16 +499,140 @@ def test_knowledge_base_payload_uses_extractive_data(tmp_path: Path) -> None:
     kb_put = next(call for call in rest.calls if "/knowledgebases/" in call.url)
     assert kb_put.json_body["outputMode"] == "extractiveData"
     assert kb_put.json_body["retrievalReasoningEffort"] == {"kind": "low"}
+    assert kb_put.json_body["knowledgeSources"] == [
+        {"name": "ks-credit-policies"},
+        {"name": "ks-client-applications"},
+    ]
 
 
 def test_missing_instructions_file_fails(tmp_path: Path) -> None:
     rest = _script_happy_path(FakeRest())
     missing = tmp_path / "nope.md"
     with pytest.raises(TalosError, match="instructions file not found"):
-        run_deploy(
+        do_deploy(
             _config(tmp_path, instructions_path=missing),
             rest=rest,
             agents=FakeAgents(),
             clock=FakeClock(),
             echo=lambda _: None,
         )
+
+
+def test_wait_accepts_index_count_when_last_sync_processed_zero(tmp_path: Path) -> None:
+    rest = FakeRest()
+    _script_source(
+        rest,
+        name="ks-credit-policies",
+        indexer="ks-credit-policies-indexer",
+        wait=True,
+        indexer_status=_done_status(processed=0, failed=0),
+        processed=0,
+    )
+    rest.expect(
+        "GET",
+        "/knowledgesources/ks-credit-policies?",
+        json_response(
+            200,
+            {
+                "azureBlobParameters": {
+                    "createdResources": {
+                        "indexer": "ks-credit-policies-indexer",
+                        "index": "ks-credit-policies-index",
+                    }
+                }
+            },
+        ),
+    )
+    rest.expect(
+        "GET",
+        "/indexes/ks-credit-policies-index/docs/$count",
+        json_response(200, 12),
+    )
+    _script_source(
+        rest,
+        name="ks-client-applications",
+        indexer="ks-client-applications-indexer",
+        wait=True,
+        indexer_status=_done_status(processed=0, failed=0),
+        processed=0,
+    )
+    rest.expect(
+        "GET",
+        "/knowledgesources/ks-client-applications?",
+        json_response(
+            200,
+            {
+                "azureBlobParameters": {
+                    "createdResources": {
+                        "indexer": "ks-client-applications-indexer",
+                        "index": "ks-client-applications-index",
+                    }
+                }
+            },
+        ),
+    )
+    rest.expect(
+        "GET",
+        "/indexes/ks-client-applications-index/docs/$count",
+        json_response(200, 3),
+    )
+    rest.expect("PUT", "/knowledgebases/kb-credit-policies", json_response(201, {}))
+    rest.expect("PUT", "/connections/conn-kb-credit-policies", json_response(200, {}))
+    do_deploy(
+        _config(tmp_path, wait=True),
+        rest=rest,
+        agents=FakeAgents(),
+        clock=FakeClock(),
+        echo=lambda _: None,
+    )
+
+
+def test_wait_fails_when_application_processed_below_minimum(tmp_path: Path) -> None:
+    rest = _script_happy_path(
+        FakeRest(),
+        wait=True,
+        application_status=_done_status(processed=1, failed=0),
+    )
+    with pytest.raises(TalosError, match="ks-client-applications"):
+        do_deploy(
+            _config(tmp_path, wait=True),
+            rest=rest,
+            agents=FakeAgents(),
+            clock=FakeClock(),
+            echo=lambda _: None,
+        )
+
+
+def test_deploy_blob_syncs_both_corpora_and_hash_skips(tmp_path: Path) -> None:
+    policy_dir = tmp_path / "policies"
+    app_dir = tmp_path / "apps"
+    policy_dir.mkdir(parents=True)
+    app_dir.mkdir(parents=True)
+    (policy_dir / "CP-RML-2026-01-residential-mortgage.md").write_text(
+        "SYNTHETIC — DEMO ONLY\n\npolicy\n", encoding="utf-8"
+    )
+    (app_dir / "accepted.md").write_text(
+        "SYNTHETIC — DEMO ONLY\n\napp\n", encoding="utf-8"
+    )
+    stores = _stores()
+    rest = _script_happy_path(FakeRest())
+    config = _config(tmp_path, policy_dir=policy_dir, application_dir=app_dir)
+    do_deploy(config, rest=rest, blob_stores=stores, echo=lambda _: None)
+    assert "CP-RML-2026-01-residential-mortgage.md" in stores["credit-policies"].uploads
+    assert "accepted.md" in stores["client-applications"].uploads
+    stores["credit-policies"].uploads.clear()
+    stores["client-applications"].uploads.clear()
+    rest2 = _script_happy_path(FakeRest())
+    do_deploy(config, rest=rest2, blob_stores=stores, echo=lambda _: None)
+    assert stores["credit-policies"].uploads == []
+    assert stores["client-applications"].uploads == []
+
+
+def test_provision_pins_temperature_zero_and_merge_patch() -> None:
+    from talos.env import repo_root as find_root
+
+    text = (find_root() / "src/talos/provision.py").read_text(encoding="utf-8")
+    assert "temperature=0" in text
+    assert 'content_type="application/merge-patch+json"' in text
+    assert "version_selector" in text
+    assert "DEFAULT_APPLICATION_KNOWLEDGE_SOURCE" in text

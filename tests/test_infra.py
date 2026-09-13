@@ -152,6 +152,7 @@ def test_resource_names_match_spec() -> None:
     assert "credit-policy-demo" in _read("variables.tf")
     storage = _read("storage.tf")
     assert DEFAULT_CONTAINER in storage
+    assert "client-applications" in storage
     assert "allow_nested_items_to_be_public = false" in storage
     assert 'min_tls_version                 = "TLS1_2"' in storage or re.search(
         r'min_tls_version\s*=\s*"TLS1_2"', storage
