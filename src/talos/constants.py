@@ -42,15 +42,69 @@ DEFAULT_APPLICATION_USER_PROMPT_RELATIVE = "corpus/application/user.md.j2"
 DEFAULT_APPLICATION_TEMPLATE_RELATIVE = "corpus/application/document.md.j2"
 
 APPLICATION_TYPES = ("accepted", "rejected", "missing-data")
-APPLICATION_TYPE_ID_TOKEN = {
-    "accepted": "ACCEPTED",
-    "rejected": "REJECTED",
-    "missing-data": "MISSING-DATA",
-}
-APPLICATION_ID_RE = r"^CA-(ACCEPTED|REJECTED|MISSING-DATA)-\d{4}-\d{2}$"
+APPLICATION_ID_RE = r"^CA-\d{4}-\d{6}$"
+APPLICATION_FILENAME_TEMPLATE = "credit-application-{application_id}.md"
+FORBIDDEN_OUTCOME_TOKENS = (
+    "ACCEPTED",
+    "REJECTED",
+    "MISSING",
+    "APPROVED",
+    "DECLINED",
+    "DENIED",
+    "PASS",
+    "FAIL",
+)
 CUSTOMER_ID_RE = r"^SYN-\d{6}$"
 EMAIL_DOMAIN = "example.invalid"
 APPLICATION_LLM_ATTEMPTS = 2
+
+PRODUCT_FAMILIES = (
+    "residential_mortgage",
+    "commercial_real_estate",
+    "unsecured_consumer",
+    "sme_lending",
+    "construction_development",
+)
+SLOT_PRODUCT_FAMILY = {
+    "accepted": "residential_mortgage",
+    "rejected": "commercial_real_estate",
+    "missing-data": "sme_lending",
+}
+PRODUCT_FAMILY_LABEL = {
+    "residential_mortgage": "owner-occupied residential mortgage",
+    "commercial_real_estate": "stabilized commercial real estate",
+    "unsecured_consumer": "unsecured personal loan",
+    "sme_lending": "SME working-capital facility",
+    "construction_development": "construction and development facility",
+}
+# Titles from CP-DOC-2026-01 and product-specific policy lists. Titles only.
+PRODUCT_REQUIRED_DOCUMENTS = {
+    "residential_mortgage": (
+        "last 2 pay stubs",
+        "W-2",
+        "residential appraisal",
+    ),
+    "commercial_real_estate": (
+        "CRE valuation report",
+        "rent roll",
+        "YTD P&L",
+    ),
+    "unsecured_consumer": (
+        "last 2 pay stubs",
+        "W-2",
+        "government photo ID",
+    ),
+    "sme_lending": (
+        "2 years tax returns",
+        "YTD P&L",
+        "personal guarantee",
+    ),
+    "construction_development": (
+        "completion guarantee",
+        "land valuation",
+        "construction budget",
+    ),
+}
 
 WATERMARK = "SYNTHETIC — DEMO ONLY"
 

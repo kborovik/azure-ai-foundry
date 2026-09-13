@@ -62,7 +62,7 @@ Identify an application by `application_id` or `customer_name` only. Type nickna
 **Evaluate by id**
 
 ```
-Evaluate application CA-ACCEPTED-2026-01 against published credit policy.
+Evaluate application CA-2026-000101 against published credit policy.
 ```
 
 **Evaluate by name**

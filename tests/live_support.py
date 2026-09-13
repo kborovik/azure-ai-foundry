@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
 
 from talos.application import parse_application_markdown
 from talos.constants import (
-    APPLICATION_TYPES,
     DEFAULT_AGENT_NAME,
     DEFAULT_KNOWLEDGE_BASE,
     FOUNDRY_SCOPE,
@@ -125,18 +125,30 @@ def _response_output_text(payload: dict[str, Any]) -> str:
 
 def application_cases() -> list[dict[str, Any]]:
     live = repo_root() / APPLICATION_OUTPUT_RELATIVE
-    if not any(live.glob("*.md")):
+    manifest_path = live / "manifest.json"
+    if not manifest_path.is_file() or not any(live.glob("credit-application-*.md")):
         pytest.skip(
-            "no local data/client-applications/*.md; "
+            "no local data/client-applications/credit-application-*.md; "
             "run `uv run talos generate application --all` first"
         )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     cases: list[dict[str, Any]] = []
-    for kind in APPLICATION_TYPES:
-        path = live / f"{kind}.md"
+    for item in manifest.get("documents") or []:
+        if not isinstance(item, dict):
+            continue
+        filename = str(item.get("filename") or "")
+        path = live / filename
         if not path.is_file():
             continue
         record = parse_application_markdown(path.read_text(encoding="utf-8"))
+        slot = str(item.get("slot") or item.get("intended_outcome") or "")
+        record["product_family"] = item.get("product_family")
+        record["intended_outcome"] = item.get("intended_outcome") or slot
+        record["application_type"] = slot
+        record["expected_judgement"] = item.get("intended_outcome") or slot
         cases.append(record)
+    if not cases:
+        pytest.skip("application manifest has no readable slots")
     return cases
 
 

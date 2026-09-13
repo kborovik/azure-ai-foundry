@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -9,13 +10,25 @@ from click.testing import CliRunner
 from talos.application import (
     ApplicationGenerateConfig,
     allocate_application_id,
+    application_filename,
+    attached_documents_for,
+    contains_forbidden_outcome_token,
     parse_application_markdown,
     parse_llm_json,
     run_generate_application,
     validate_record,
 )
 from talos.cli import cli
-from talos.constants import APPLICATION_TYPES, WATERMARK
+from talos.constants import (
+    APPLICATION_ID_RE,
+    APPLICATION_TYPES,
+    FORBIDDEN_OUTCOME_TOKENS,
+    PRODUCT_FAMILIES,
+    PRODUCT_FAMILY_LABEL,
+    PRODUCT_REQUIRED_DOCUMENTS,
+    SLOT_PRODUCT_FAMILY,
+    WATERMARK,
+)
 from talos.env import repo_root
 from talos.errors import TalosError
 from talos.generate import first_visible_line
@@ -42,30 +55,29 @@ class ScriptedCompleter:
 
 
 def _valid_record(kind: str, **overrides: object) -> dict:
-    token = {
-        "accepted": "ACCEPTED",
-        "rejected": "REJECTED",
-        "missing-data": "MISSING-DATA",
-    }[kind]
+    family = SLOT_PRODUCT_FAMILY[kind]
+    attached, _omitted = attached_documents_for(kind, family)
+    names = {
+        "accepted": ("Pat Rivet", "SYN-111111", "pat.rivet@example.invalid"),
+        "rejected": ("Pat Quarry", "SYN-222222", "pat.quarry@example.invalid"),
+        "missing-data": ("Pat Harbor", "SYN-333333", "pat.harbor@example.invalid"),
+    }
+    customer_name, customer_id, email = names[kind]
     record: dict = {
-        "application_id": f"CA-{token}-2026-01",
-        "application_type": kind,
-        "expected_judgement": kind,
-        "expected_policy_ids": ["CP-RML-2026-01"],
-        "customer_name": f"Pat {kind.title()}",
-        "customer_id": "SYN-111111"
-        if kind == "accepted"
-        else ("SYN-222222" if kind == "rejected" else "SYN-333333"),
-        "email": f"{kind.replace('-', '.')}@example.invalid",
+        "application_id": "CA-2026-000001",
+        "customer_name": customer_name,
+        "customer_id": customer_id,
+        "email": email,
         "phone": "+1-555-0100",
         "address": "1 Demo Street, Contoso City, CD 00000",
         "age_band": "35-44",
         "employer": "Northwind",
         "annual_income": "USD 90,000",
-        "product": "owner-occupied residential mortgage",
-        "facility": {"loan_amount": "USD 200,000", "credit_score": "720", "ltv": "70%"},
-        "narrative": "Synthetic demo narrative for unit tests with enough length.",
-        "missing_items": ["2 years tax returns"] if kind == "missing-data" else [],
+        "product": PRODUCT_FAMILY_LABEL[family],
+        "product_family": family,
+        "facility": {"loan_amount": "USD 200,000", "credit_score": "720"},
+        "narrative": "I request this synthetic demo facility and list the documents I am submitting.",
+        "attached_documents": list(attached),
     }
     record.update(overrides)
     return record
@@ -90,6 +102,7 @@ def test_application_help_documents_flags() -> None:
     for flag in ("--type", "--all", "--force", "--local-only", "--dry-run"):
         assert flag in result.output
     assert "knowledge source" in result.output.lower() or "PUT" in result.output
+    assert "operator" in result.output.lower()
 
 
 def test_application_requires_type_or_all() -> None:
@@ -131,45 +144,71 @@ def test_application_cli_dry_run_exit_0(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     assert "dry-run" in result.output
     assert "no LLM call" in result.output
+    assert "credit-application-CA-" in result.output
 
 
-def test_generate_one_slot_writes_watermarked_markdown(tmp_path: Path) -> None:
+def test_generate_one_slot_writes_opaque_customer_filing(tmp_path: Path) -> None:
     out = tmp_path / "apps"
     completer = ScriptedCompleter([_valid_record("accepted")])
     rendered = run_generate_application(
         _config(out), completer=completer, echo=lambda _: None
     )
     assert len(rendered) == 1
-    path = out / "accepted.md"
+    application_id = rendered[0].record["application_id"]
+    assert re.fullmatch(APPLICATION_ID_RE, application_id)
+    assert not contains_forbidden_outcome_token(application_id)
+    filename = application_filename(application_id)
+    assert filename == f"credit-application-{application_id}.md"
+    path = out / filename
     text = path.read_text(encoding="utf-8")
     assert first_visible_line(text) == WATERMARK
     parsed = parse_application_markdown(text)
-    assert parsed["application_id"] == "CA-ACCEPTED-2026-01"
+    assert parsed["application_id"] == application_id
     assert parsed["customer_id"] == "SYN-111111"
     assert parsed["email"].endswith("@example.invalid")
     assert parsed["facility"]["loan_amount"] == "USD 200,000"
     assert parsed["narrative"]
+    assert "identity" in text.lower()
+    assert "product" in text.lower()
+    assert "attached document" in text.lower()
+    assert parsed["facility"]["loan_amount"] in text
+    for title in parsed["attached_documents"]:
+        assert title in text
+    assert "application_type" not in parsed
+    assert "intended_outcome" not in parsed
+    assert "expected_judgement" not in text
+    assert "application_type" not in text
+    assert "intended_outcome" not in text
+    assert "missing-data" not in text
     assert (
         validate_record(
             parsed,
             application_type="accepted",
             used=set(),
-            required_id="CA-ACCEPTED-2026-01",
+            required_id=application_id,
+            product_family=SLOT_PRODUCT_FAMILY["accepted"],
         )
         == []
     )
     manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["container"] == "client-applications"
-    assert manifest["documents"][0]["application_type"] == "accepted"
+    assert manifest["documents"][0]["intended_outcome"] == "accepted"
+    assert manifest["documents"][0]["slot"] == "accepted"
+    assert manifest["documents"][0]["filename"] == filename
+    assert not (out / "accepted.md").exists()
+    extras = [p for p in out.iterdir() if p.suffix not in {".md", ".json"}]
+    assert extras == []
 
 
-def test_generate_all_writes_three_unique_identities(tmp_path: Path) -> None:
+def test_generate_all_writes_three_unique_identities_and_products(
+    tmp_path: Path,
+) -> None:
     out = tmp_path / "apps"
     completer = ScriptedCompleter(
         [
             _valid_record("accepted"),
             _valid_record("rejected"),
-            _valid_record("missing-data", expected_policy_ids=["CP-DOC-2026-01"]),
+            _valid_record("missing-data"),
         ]
     )
     rendered = run_generate_application(
@@ -180,16 +219,66 @@ def test_generate_all_writes_three_unique_identities(tmp_path: Path) -> None:
     assert len(rendered) == 3
     names = {item.record["customer_name"] for item in rendered}
     ids = {item.record["customer_id"] for item in rendered}
+    app_ids = {item.record["application_id"] for item in rendered}
+    families = {item.record["product_family"] for item in rendered}
     assert len(names) == 3
     assert len(ids) == 3
-    for kind in APPLICATION_TYPES:
-        assert (out / f"{kind}.md").is_file()
+    assert len(app_ids) == 3
+    assert len(families) == 3
+    assert families <= set(PRODUCT_FAMILIES)
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    slots = {doc["slot"] for doc in manifest["documents"]}
+    assert slots == set(APPLICATION_TYPES)
+    for doc in manifest["documents"]:
+        assert re.fullmatch(APPLICATION_ID_RE, doc["application_id"])
+        assert not contains_forbidden_outcome_token(doc["application_id"])
+        assert doc["filename"] == f"credit-application-{doc['application_id']}.md"
+        assert (out / doc["filename"]).is_file()
+        assert doc["intended_outcome"] == doc["slot"]
+        text = (out / doc["filename"]).read_text(encoding="utf-8")
+        assert "intended_outcome" not in text
+        assert "application_type" not in text
+        assert "missing-data" not in text
+        assert "--type" not in text
+        assert doc["intended_outcome"] not in text
+
+
+def test_attached_docs_complete_or_omitted_by_slot(tmp_path: Path) -> None:
+    out = tmp_path / "apps"
+    completer = ScriptedCompleter(
+        [
+            _valid_record("accepted"),
+            _valid_record("rejected"),
+            _valid_record("missing-data"),
+        ]
+    )
+    rendered = run_generate_application(
+        _config(out, types=APPLICATION_TYPES),
+        completer=completer,
+        echo=lambda _: None,
+    )
+    by_slot = {item.application_type: item for item in rendered}
+    for kind in ("accepted", "rejected"):
+        family = by_slot[kind].record["product_family"]
+        attached = {
+            title.strip() for title in by_slot[kind].record["attached_documents"]
+        }
+        assert attached == set(PRODUCT_REQUIRED_DOCUMENTS[family])
+    missing = by_slot["missing-data"]
+    family = missing.record["product_family"]
+    attached = {title.strip() for title in missing.record["attached_documents"]}
+    required = set(PRODUCT_REQUIRED_DOCUMENTS[family])
+    assert attached < required
+    assert required - attached
 
 
 def test_existing_slot_requires_force(tmp_path: Path) -> None:
     out = tmp_path / "apps"
     completer = ScriptedCompleter([_valid_record("accepted")])
-    run_generate_application(_config(out), completer=completer, echo=lambda _: None)
+    first = run_generate_application(
+        _config(out), completer=completer, echo=lambda _: None
+    )
+    old_name = first[0].filename
     with pytest.raises(TalosError, match="pass --force"):
         run_generate_application(
             _config(out),
@@ -207,7 +296,7 @@ def test_existing_slot_requires_force(tmp_path: Path) -> None:
         ),
         echo=lambda _: None,
     )
-    text = (out / "accepted.md").read_text(encoding="utf-8")
+    text = (out / old_name).read_text(encoding="utf-8")
     assert "New Person" in text
 
 
@@ -263,11 +352,13 @@ def test_optional_blob_upload_hash_metadata(tmp_path: Path) -> None:
         blob_store=store,
         echo=lambda _: None,
     )
-    assert store.uploads == ["accepted.md"]
-    blob = store.blobs["accepted.md"]
+    filename = rendered[0].filename
+    assert store.uploads == [filename]
+    blob = store.blobs[filename]
     assert blob.metadata["content_sha256"] == rendered[0].content_sha256
-    assert blob.metadata["application_id"] == "CA-ACCEPTED-2026-01"
+    assert blob.metadata["application_id"] == rendered[0].record["application_id"]
     assert blob.metadata["synthetic"] == "true"
+    assert "application_type" not in blob.metadata
 
 
 def test_generate_application_does_not_put_knowledge_source(tmp_path: Path) -> None:
@@ -280,17 +371,35 @@ def test_fixtures_parse_and_cover_each_type() -> None:
     fixtures = load_application_fixtures()
     kinds = {item["application_type"] for item in fixtures}
     assert kinds == set(APPLICATION_TYPES)
+    families = {item["product_family"] for item in fixtures}
+    assert len(families) == 3
     for record in fixtures:
-        path = FIXTURES / f"{record['application_type']}.md"
+        filename = str(record["filename"])
+        path = FIXTURES / filename
         text = path.read_text(encoding="utf-8")
         assert first_visible_line(text) == WATERMARK
+        assert filename == f"credit-application-{record['application_id']}.md"
+        assert re.fullmatch(APPLICATION_ID_RE, str(record["application_id"]))
+        assert not contains_forbidden_outcome_token(str(record["application_id"]))
+        assert "intended_outcome" not in text
+        assert "application_type" not in text
+        assert "expected_judgement" not in text
+        parsed = parse_application_markdown(text)
         errors = validate_record(
-            record,
+            parsed,
             application_type=str(record["application_type"]),
             used=set(),
             required_id=str(record["application_id"]),
+            product_family=str(record["product_family"]),
         )
         assert errors == [], errors
+        family = str(record["product_family"])
+        attached = {title.strip() for title in parsed["attached_documents"]}
+        required = set(PRODUCT_REQUIRED_DOCUMENTS[family])
+        if record["application_type"] == "missing-data":
+            assert attached < required
+        else:
+            assert attached == required
 
 
 def test_gitignore_covers_generated_applications(repo_root: Path) -> None:
@@ -302,8 +411,14 @@ def test_gitignore_covers_generated_applications(repo_root: Path) -> None:
 
 
 def test_allocate_application_id_skips_used() -> None:
-    used = {"CA-ACCEPTED-2026-01"}
-    assert allocate_application_id("accepted", used) == "CA-ACCEPTED-2026-02"
+    used = {"CA-2026-000001"}
+    assert allocate_application_id(used, year=2026) == "CA-2026-000002"
+    assert re.fullmatch(APPLICATION_ID_RE, allocate_application_id(set(), year=2026))
+
+
+def test_forbidden_outcome_tokens_are_rejected_in_id() -> None:
+    for token in FORBIDDEN_OUTCOME_TOKENS:
+        assert contains_forbidden_outcome_token(f"CA-{token}-2026-01")
 
 
 def test_parse_llm_json_strips_fence() -> None:

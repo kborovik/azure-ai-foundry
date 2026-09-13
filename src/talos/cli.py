@@ -145,13 +145,13 @@ def generate_policy(
     "application_type",
     type=click.Choice(APPLICATION_TYPES, case_sensitive=True),
     default=None,
-    help="Generate one ApplicationType slot.",
+    help="Hidden operator constraint: one slot. Not written into id, filename, or Markdown.",
 )
 @click.option(
     "--all",
     "all_types",
     is_flag=True,
-    help="Generate all three ApplicationType slots with unique identities.",
+    help="Generate all three slots with unique identities (operator constraint).",
 )
 @click.option(
     "--out",
@@ -189,7 +189,7 @@ def generate_policy(
 @click.option(
     "--force",
     is_flag=True,
-    help="Overwrite an existing type slot.",
+    help="Overwrite an existing slot.",
 )
 @click.option(
     "--no-terraform",
@@ -208,7 +208,7 @@ def generate_application_cmd(
     force: bool,
     no_terraform: bool,
 ) -> None:
-    """Generate unique synthetic client applications via Foundry gpt-5-mini. Does not PUT knowledge sources."""
+    """Generate opaque synthetic customer filings via Foundry gpt-5-mini. Does not PUT knowledge sources."""
     from talos.application import ApplicationGenerateConfig, run_generate_application
 
     try:

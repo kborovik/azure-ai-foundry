@@ -1,0 +1,33 @@
+{
+  "watermark": "SYNTHETIC — DEMO ONLY",
+  "container": "client-applications",
+  "documents": [
+    {
+      "slot": "accepted",
+      "application_id": "CA-2026-000101",
+      "intended_outcome": "accepted",
+      "filename": "credit-application-CA-2026-000101.md",
+      "customer_name": "Helene Voss",
+      "customer_id": "SYN-104822",
+      "product_family": "residential_mortgage"
+    },
+    {
+      "slot": "rejected",
+      "application_id": "CA-2026-000202",
+      "intended_outcome": "rejected",
+      "filename": "credit-application-CA-2026-000202.md",
+      "customer_name": "Bram Cotter",
+      "customer_id": "SYN-209331",
+      "product_family": "commercial_real_estate"
+    },
+    {
+      "slot": "missing-data",
+      "application_id": "CA-2026-000303",
+      "intended_outcome": "missing-data",
+      "filename": "credit-application-CA-2026-000303.md",
+      "customer_name": "Nia Pell",
+      "customer_id": "SYN-318704",
+      "product_family": "sme_lending"
+    }
+  ]
+}

@@ -4,6 +4,7 @@
 
 ### Changed
 
+- **Opaque customer filings:** `talos generate application` writes `credit-application-{application_id}.md` with opaque ids `CA-YYYY-NNNNNN`. Markdown is a borrower filing (identity, product, amount, financials, attached-document titles). `accepted`/`rejected` list the full required-document set; `missing-data` omits at least one title. Mixed product families per slot. `intended_outcome` lives in gitignored `manifest.json` only. EvaluationMode compares attached-docs to `CP-DOC-2026-01` plus the product required list, then emits a judgement, and must not infer outcome from id or filename.
 - **Unit tests:** drop `talos test` Click command. `gmake test` runs `uv run pytest` (addopts `-m unit`). `gmake check` runs ruff then `test`. GitHub Actions unit workflow runs `uv run pytest`.
 - **Generate group:** `uv run talos generate` is a Click group (`policy`, `application`). Bare `talos generate` prints help and exits 2. `talos generate policy` is the existing policy render and does not run deploy.
 - **Standing terraform init:** `gmake infra-init` and README use `-reconfigure`, not `-migrate-state`. Remote azurerm state is already live. Reconstruct after clone with backend-config `key=<env>.tfstate`.

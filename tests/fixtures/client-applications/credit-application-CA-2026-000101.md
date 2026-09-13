@@ -1,0 +1,66 @@
+SYNTHETIC — DEMO ONLY
+
+---
+application_id: CA-2026-000101
+customer_name: Helene Voss
+customer_id: SYN-104822
+email: helene.voss@example.invalid
+phone: +1-555-0142
+address: 18 Cedar Walk, Contoso Shores, CD 00011
+age_band: 35-44
+employer: Northwind Paper Co
+annual_income: USD 118,000
+product: owner-occupied residential mortgage
+facility:
+  loan_amount: USD 320,000
+  property_value: USD 450,000
+  ltv: 71%
+  dti: 36%
+  credit_score: "720"
+  occupancy: owner-occupied
+attached_documents:
+  - last 2 pay stubs
+  - W-2
+  - residential appraisal
+narrative: I, Helene Voss, apply for an owner-occupied residential mortgage of USD 320,000 on a property valued at USD 450,000. My stated LTV is 71%, DTI is 36%, and credit score is 720. I work at Northwind Paper Co.
+---
+
+# Credit application CA-2026-000101
+
+I am filing this synthetic credit application with Contoso Demo Bank. This is not a real borrower record.
+
+## Identity
+
+- Name: Helene Voss
+- Customer id: SYN-104822
+- Address: 18 Cedar Walk, Contoso Shores, CD 00011
+- Age band: 35-44
+- Employer: Northwind Paper Co
+- Annual income: USD 118,000
+- Email: helene.voss@example.invalid
+- Phone: +1-555-0142
+
+## Product
+
+owner-occupied residential mortgage
+
+## Amount and financials
+
+- loan_amount: USD 320,000
+- property_value: USD 450,000
+- ltv: 71%
+- dti: 36%
+- credit_score: 720
+- occupancy: owner-occupied
+
+## Attached documents
+
+I am listing the titles of documents I am submitting. I am not enclosing the files.
+
+- last 2 pay stubs
+- W-2
+- residential appraisal
+
+## Applicant statement
+
+I, Helene Voss, apply for an owner-occupied residential mortgage of USD 320,000 on a property valued at USD 450,000. My stated LTV is 71%, DTI is 36%, and credit score is 720. I work at Northwind Paper Co.

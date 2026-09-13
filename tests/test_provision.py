@@ -683,7 +683,7 @@ def test_deploy_blob_syncs_both_corpora_and_hash_skips(tmp_path: Path) -> None:
     (policy_dir / "CP-RML-2026-01-residential-mortgage.md").write_text(
         "SYNTHETIC — DEMO ONLY\n\npolicy\n", encoding="utf-8"
     )
-    (app_dir / "accepted.md").write_text(
+    (app_dir / "credit-application-CA-2026-000001.md").write_text(
         "SYNTHETIC — DEMO ONLY\n\napp\n", encoding="utf-8"
     )
     stores = _stores()
@@ -691,7 +691,9 @@ def test_deploy_blob_syncs_both_corpora_and_hash_skips(tmp_path: Path) -> None:
     config = _config(tmp_path, policy_dir=policy_dir, application_dir=app_dir)
     do_deploy(config, rest=rest, blob_stores=stores, echo=lambda _: None)
     assert "CP-RML-2026-01-residential-mortgage.md" in stores["credit-policies"].uploads
-    assert "accepted.md" in stores["client-applications"].uploads
+    assert "credit-application-CA-2026-000001.md" in stores[
+        "client-applications"
+    ].uploads
     stores["credit-policies"].uploads.clear()
     stores["client-applications"].uploads.clear()
     rest2 = _script_happy_path(FakeRest())

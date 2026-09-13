@@ -44,6 +44,7 @@ def test_evaluate_by_customer_name(live_env: dict[str, str]) -> None:
     assert name.split()[0] in text or "reject" in lower
     assert citation_glyph_present(text)
     assert "accepted.md" not in text and "rejected.md" not in text
+    assert "credit-application-" not in text or "CP-" in text
 
 
 def test_ask_when_missing_identifier(live_env: dict[str, str]) -> None:

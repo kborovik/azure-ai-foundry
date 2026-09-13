@@ -98,7 +98,7 @@ T20|x|extend `agents/credit-policy-agent.instructions.md` EvaluationMode: id or 
 T21|.|drop `talos test` Click; Makefile `test` → `uv run pytest`; `check` calls test; GHA unit `uv run pytest`; drop CLI pytest.main + forwarding test + GHA `talos test` assert|V20,I.cmd,I.make,I.pytest
 T22|x|swap terraform `local.resource_token` md5(subscription-env-location) → literal `lab5`; `gmake infra-destroy` then `gmake infra-create`|I.names,I.infra,V11
 T23|x|drop terraform variables not in tfvars (`principal_id`, `chat_capacity`, `embedding_capacity`, `project_name`, `chat_deployment_name`, `embedding_deployment_name`) → locals/literals|V29,I.infra
-T24|.|swap application generate+fixtures+instructions → opaque `CA-YYYY-NNNNNN`, customer filing + attached-docs list, file `credit-application-{application_id}.md`, mixed products, intended_outcome in manifest only, EvaluationMode compare docs + emit judgement, ! infer outcome from id or filename|V1,V2,V5,V27,V31,V32,I.cmd,I.file,I.agent
+T24|x|swap application generate+fixtures+instructions → opaque `CA-YYYY-NNNNNN`, customer filing + attached-docs list, file `credit-application-{application_id}.md`, mixed products, intended_outcome in manifest only, EvaluationMode compare docs + emit judgement, ! infer outcome from id or filename|V1,V2,V5,V27,V31,V32,I.cmd,I.file,I.agent
 
 ## §B BUGS
 

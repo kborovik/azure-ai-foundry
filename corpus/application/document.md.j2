@@ -2,11 +2,6 @@
 
 ---
 application_id: {{ app.application_id }}
-application_type: {{ app.application_type }}
-expected_judgement: {{ app.expected_judgement }}
-expected_policy_ids:
-{% for policy_id in app.expected_policy_ids %}  - {{ policy_id }}
-{% endfor %}
 customer_name: {{ app.customer_name }}
 customer_id: {{ app.customer_id }}
 email: {{ app.email }}
@@ -19,21 +14,21 @@ product: {{ app.product }}
 facility:
 {% for key, value in app.facility.items() %}  {{ key }}: {{ value | tojson }}
 {% endfor %}
-narrative: {{ app.narrative | tojson }}
-{% if app.missing_items %}
-missing_items:
-{% for item in app.missing_items %}  - {{ item | tojson }}
+{% if app.attached_documents %}
+attached_documents:
+{% for title in app.attached_documents %}  - {{ title | tojson }}
 {% endfor %}
 {% else %}
-missing_items: []
+attached_documents: []
 {% endif %}
+narrative: {{ app.narrative | tojson }}
 ---
 
-# Client application {{ app.application_id }}
+# Credit application {{ app.application_id }}
 
-This file is a synthetic demo client application. It is not a real borrower record and is not a production credit decision.
+I am filing this synthetic credit application with Contoso Demo Bank. This is not a real borrower record.
 
-## Applicant
+## Identity
 
 - Name: {{ app.customer_name }}
 - Customer id: {{ app.customer_id }}
@@ -48,20 +43,20 @@ This file is a synthetic demo client application. It is not a real borrower reco
 
 {{ app.product }}
 
-## Facility
+## Amount and financials
 
 {% for key, value in app.facility.items() -%}
 - {{ key }}: {{ value }}
 {% endfor %}
 
-{% if app.missing_items %}
-## Missing items
+## Attached documents
 
-{% for item in app.missing_items -%}
-- {{ item }}
+I am listing the titles of documents I am submitting. I am not enclosing the files.
+
+{% for title in app.attached_documents -%}
+- {{ title }}
 {% endfor %}
-{% endif %}
 
-## Narrative
+## Applicant statement
 
 {{ app.narrative }}
