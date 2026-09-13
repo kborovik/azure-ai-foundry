@@ -25,11 +25,12 @@ STORAGE_ID = (
 AI_SERVICES = "https://aif-cp-demo.services.ai.azure.com"
 
 
-def test_root_help_lists_generate_deploy_and_test() -> None:
+def test_root_help_lists_generate_deploy_publish_and_test() -> None:
     result = CliRunner().invoke(cli, ["--help"])
     assert result.exit_code == 0
     assert "generate" in result.output
     assert "deploy" in result.output
+    assert "publish" in result.output
     assert "test" in result.output
 
 
@@ -49,7 +50,12 @@ def test_deploy_help_documents_plan_flags() -> None:
 
 
 def test_no_terraform_help_mentions_outputs_json() -> None:
-    for cmd in (("generate", "policy"), ("generate", "application"), ("deploy",)):
+    for cmd in (
+        ("generate", "policy"),
+        ("generate", "application"),
+        ("deploy",),
+        ("publish",),
+    ):
         result = CliRunner().invoke(cli, [*cmd, "--help"])
         assert result.exit_code == 0
         assert "infra/outputs.json" in result.output

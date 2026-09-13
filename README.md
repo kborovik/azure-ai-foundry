@@ -81,11 +81,13 @@ uv run talos generate policy --local-only
 uv run talos generate application --all --local-only
 uv run talos deploy --help
 uv run talos deploy --wait                    # blob-sync both corpora, two KS, two indexers
+uv run talos publish --dry-run                # optional Teams Just-you REST
+uv run talos publish
 ```
 
 `talos generate` is a Click group. `talos generate policy` renders the committed 12 policy files and does not run deploy. `talos generate application` calls Foundry `gpt-5-mini` for a unique SyntheticBorrower (`--type` or `--all`; `--force` to overwrite a slot). Generated applications under `data/client-applications/` are gitignored. `talos deploy` hash-skips blob upload of both local corpora, PUTs `ks-credit-policies` and `ks-client-applications`, runs both indexers, and PUTs `kb-credit-policies` with both sources.
 
-Teams publish is Just you. See [docs/teams.md](docs/teams.md).
+Teams publish is Just you (`BotServiceRbac`). Portal Direct publish or optional `uv run talos publish` (REST). Sideload is the fallback. See [docs/teams.md](docs/teams.md). Hosted agents and a custom Microsoft 365 Agents SDK host are not v1; see [docs/hosted-agents.md](docs/hosted-agents.md).
 
 ## GitHub Actions
 

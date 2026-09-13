@@ -1,6 +1,9 @@
 SEARCH_API_VERSION = "2026-08-01-preview"
 ARM_API_VERSION = "2025-10-01-preview"
 FOUNDRY_API_VERSION = "v1"
+BOT_API_VERSION = "2022-09-15"
+BOT_CHANNEL_API_VERSION = "2021-03-01"
+ACTIVITY_PROTOCOL_API_VERSION = "2025-05-15-preview"
 
 SEARCH_SCOPE = "https://search.azure.com/.default"
 ARM_SCOPE = "https://management.azure.com/.default"
@@ -13,6 +16,19 @@ DEFAULT_APPLICATION_KNOWLEDGE_SOURCE = "ks-client-applications"
 DEFAULT_KNOWLEDGE_BASE = "kb-credit-policies"
 DEFAULT_AGENT_NAME = "credit-policy-agent"
 DEFAULT_CONNECTION_NAME = "conn-kb-credit-policies"
+DEFAULT_BOT_NAME = "bot-credit-policy-agent"
+DEFAULT_PUBLISH_DISPLAY_NAME = "Credit Policy Agent"
+DEFAULT_APP_VERSION = "1.0.0"
+DEFAULT_DEVELOPER_NAME = "Contoso Demo Bank"
+DEFAULT_PUBLISH_SHORT_DESCRIPTION = (
+    "Cited credit-policy answers and synthetic application evaluation."
+)
+DEFAULT_PUBLISH_FULL_DESCRIPTION = (
+    "Demo Foundry prompt agent that answers credit-policy questions from synthetic "
+    "Markdown in Foundry IQ and evaluates three synthetic client applications by "
+    "application_id or customer_name. Not a production credit system."
+)
+PUBLISH_SCOPE_JUST_YOU = "Shared"
 DEFAULT_CHAT_DEPLOYMENT = "gpt-5-mini"
 DEFAULT_EMBEDDING_DEPLOYMENT = "text-embedding-3-large"
 DEFAULT_INSTRUCTIONS_RELATIVE = "agents/credit-policy-agent.instructions.md"

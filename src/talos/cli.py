@@ -11,15 +11,19 @@ from talos.constants import (
     DEFAULT_APPLICATION_CONTAINER,
     DEFAULT_APPLICATION_KNOWLEDGE_SOURCE,
     DEFAULT_APPLICATION_OUTPUT_RELATIVE,
+    DEFAULT_APP_VERSION,
+    DEFAULT_BOT_NAME,
     DEFAULT_CHAT_DEPLOYMENT,
     DEFAULT_CONNECTION_NAME,
     DEFAULT_CONTAINER,
+    DEFAULT_DEVELOPER_NAME,
     DEFAULT_EMBEDDING_DEPLOYMENT,
     DEFAULT_FACTS_RELATIVE,
     DEFAULT_INSTRUCTIONS_RELATIVE,
     DEFAULT_KNOWLEDGE_BASE,
     DEFAULT_KNOWLEDGE_SOURCE,
     DEFAULT_OUTPUT_RELATIVE,
+    DEFAULT_PUBLISH_DISPLAY_NAME,
     DEFAULT_TEMPLATES_RELATIVE,
 )
 from talos.env import repo_root, require_env, resolve_env
@@ -31,7 +35,7 @@ from talos.provision import DeployConfig, run_deploy
 @click.group()
 @click.version_option(version=__version__, prog_name="talos")
 def cli() -> None:
-    """Generate, deploy, and test the credit-policy agent on Microsoft Foundry."""
+    """Generate, deploy, publish, and test the credit-policy agent on Microsoft Foundry."""
 
 
 @cli.group(invoke_without_command=True)
@@ -369,6 +373,136 @@ def deploy(
                 exit_code=2,
             )
         run_deploy(config, echo=click.echo)
+    except TalosError as exc:
+        click.echo(str(exc), err=True)
+        raise SystemExit(exc.exit_code) from exc
+
+
+@cli.command()
+@click.option(
+    "--project-endpoint",
+    default=None,
+    help="Foundry project endpoint. Default $AZURE_AI_PROJECT_ENDPOINT.",
+)
+@click.option(
+    "--project-resource-id",
+    default=None,
+    help="Foundry project ARM id. Default $AZURE_AI_PROJECT_RESOURCE_ID.",
+)
+@click.option(
+    "--resource-group",
+    default=None,
+    help="Workload resource group. Default $AZURE_RESOURCE_GROUP or the project ARM id.",
+)
+@click.option("--agent-name", default=DEFAULT_AGENT_NAME, show_default=True)
+@click.option("--bot-name", default=DEFAULT_BOT_NAME, show_default=True)
+@click.option(
+    "--bot-arm-id",
+    default=None,
+    help="Existing Azure Bot Service ARM id. Skip bot create when set.",
+)
+@click.option(
+    "--display-name",
+    default=DEFAULT_PUBLISH_DISPLAY_NAME,
+    show_default=True,
+    help="Teams / Microsoft 365 store display name.",
+)
+@click.option(
+    "--app-version",
+    default=DEFAULT_APP_VERSION,
+    show_default=True,
+    help="Store metadata version (digits and periods; cannot start with 0).",
+)
+@click.option(
+    "--developer-name",
+    default=DEFAULT_DEVELOPER_NAME,
+    show_default=True,
+    help="Store developer name (max 32 characters).",
+)
+@click.option(
+    "--tenant-id",
+    default=None,
+    help="Microsoft Entra tenant id. Default $AZURE_TENANT_ID or the access token tid.",
+)
+@click.option(
+    "--skip-endpoint-patch",
+    is_flag=True,
+    help="Do not PATCH agent_endpoint (also skipped when Activity + BotServiceRbac exist).",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Print the Just-you publish plan without calling Azure.",
+)
+@click.option(
+    "--no-terraform",
+    is_flag=True,
+    help="Do not fill missing env vars from `infra/outputs.json`.",
+)
+def publish(
+    project_endpoint: str | None,
+    project_resource_id: str | None,
+    resource_group: str | None,
+    agent_name: str,
+    bot_name: str,
+    bot_arm_id: str | None,
+    display_name: str,
+    app_version: str,
+    developer_name: str,
+    tenant_id: str | None,
+    skip_endpoint_patch: bool,
+    dry_run: bool,
+    no_terraform: bool,
+) -> None:
+    """Publish the prompt agent to Microsoft Teams Just you via Foundry REST (BotServiceRbac)."""
+    from talos.publish import (
+        PublishConfig,
+        resource_group_from_resource_id,
+        run_publish,
+    )
+
+    try:
+        env = resolve_env(use_terraform=not no_terraform)
+        resolved_project_id = _first(
+            project_resource_id, env.get("AZURE_AI_PROJECT_RESOURCE_ID")
+        )
+        resolved_rg = _first(resource_group, env.get("AZURE_RESOURCE_GROUP"))
+        if not resolved_rg and resolved_project_id:
+            resolved_rg = resource_group_from_resource_id(resolved_project_id)
+        config = PublishConfig(
+            project_endpoint=_first(
+                project_endpoint, env.get("AZURE_AI_PROJECT_ENDPOINT")
+            ),
+            project_resource_id=resolved_project_id,
+            resource_group=resolved_rg,
+            agent_name=agent_name,
+            bot_name=bot_name,
+            bot_arm_id=bot_arm_id or "",
+            display_name=display_name,
+            app_version=app_version,
+            developer_name=developer_name,
+            tenant_id=_first(tenant_id, env.get("AZURE_TENANT_ID")),
+            dry_run=dry_run,
+            skip_endpoint_patch=skip_endpoint_patch,
+        )
+        missing = [
+            name
+            for name, value in (
+                ("AZURE_AI_PROJECT_ENDPOINT", config.project_endpoint),
+                ("AZURE_AI_PROJECT_RESOURCE_ID", config.project_resource_id),
+                ("AZURE_RESOURCE_GROUP", config.resource_group),
+            )
+            if not value
+        ]
+        if missing:
+            names = ", ".join(missing)
+            raise TalosError(
+                f"Azure environment is not configured (missing {names}). "
+                "Set the variables, pass CLI flags, or run `gmake infra-create` "
+                "(writes `infra/outputs.json`).",
+                exit_code=2,
+            )
+        run_publish(config, echo=click.echo)
     except TalosError as exc:
         click.echo(str(exc), err=True)
         raise SystemExit(exc.exit_code) from exc

@@ -46,6 +46,9 @@ def test_runbook_documents_just_you_and_sideload() -> None:
         "application_id",
         "customer_name",
         "E2E_TEAMS",
+        "talos publish",
+        "publishScope",
+        "hosted-agents.md",
     ):
         assert needle in text, needle
 

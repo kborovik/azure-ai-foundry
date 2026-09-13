@@ -16,10 +16,26 @@ az provider register --namespace Microsoft.BotService
 
 ## Direct publish (Just you)
 
+Portal or REST. Both set `publishScope=Shared` (Just you) and `BotServiceRbac`. Do not publish Tenant / `BotServiceTenant` in v1.
+
+### Portal
+
 1. Open the Foundry project `credit-policy-demo`.
 2. Open agent `credit-policy-agent`.
 3. Publish to Microsoft Teams → **Just you** (BotServiceRbac).
 4. After publish, do **not** replace `protocol_configuration` or `authorization_schemes`. Later `talos deploy` skips the endpoint merge-patch when Activity is already enabled (`--skip-endpoint-patch` is implied).
+
+### REST (`talos publish`)
+
+Optional automation of the same Just-you path. Creates (or updates) an Azure Bot Service resource with the Teams channel, merge-patches Activity + `BotServiceRbac` while keeping existing `responses` / `Entra`, then POSTs Foundry's Microsoft 365 publish API.
+
+```bash
+uv run talos publish --dry-run
+uv run talos publish
+uv run talos publish --app-version 1.0.1   # store metadata only; increment if 409
+```
+
+`--skip-endpoint-patch` skips the Activity merge-patch (also skipped when Activity and `BotServiceRbac` are already on the agent). `--bot-arm-id` reuses an existing bot. Missing Azure env exits 2. Hosted agents and a custom Microsoft 365 Agents SDK host are out of v1; see [docs/hosted-agents.md](hosted-agents.md).
 
 ## Sideload fallback
 

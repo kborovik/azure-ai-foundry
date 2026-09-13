@@ -17,6 +17,7 @@
 
 ### Added
 
+- **`talos publish`:** optional REST path for Teams Just you (`publishScope=Shared`, `BotServiceRbac`). Creates the Azure Bot Service + Teams channel, merge-patches Activity without dropping existing `protocol_configuration` / `authorization_schemes`, then POSTs Foundry's Microsoft 365 publish API. `--dry-run` prints the plan. Portal Direct publish remains valid. Hosted-agent spike: [docs/hosted-agents.md](docs/hosted-agents.md).
 - **EvaluationMode:** `agents/credit-policy-agent.instructions.md` evaluates by `application_id` or `customer_name`, asks if both are missing, and cites policy documents only.
 - **Teams Just-you:** runbook in `docs/teams.md` (BotServiceRbac, sideload fallback, evaluate-by-id and evaluate-by-name). Marker `teams` skips unless `E2E_TEAMS=1`; flag set with no Activity client skips, not fails.
 - **Live pytest:** markers `ingestion`, `retrieval`, and `agent` skip without canonical Azure env. Evaluate-by-id, evaluate-by-name, ask-when-missing, and one case per ApplicationType. Unit fixtures in `tests/fixtures/client-applications/`.
