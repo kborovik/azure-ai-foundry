@@ -65,24 +65,20 @@ default: help
 # Tests and local loop
 ###############################################################################
 
-test: .venv ## Unit tests (no Azure)
-	$(call header,Running unit tests)
-	$(UV) run pytest
-
-check: .venv ## Format check, lint, unit tests (no Azure)
+check: .venv ## Check Python code
 	$(call header,Checking)
 	$(UV) run ruff format --check
 	$(UV) run ruff check
-	$(MAKE) test
+	$(UV) run pytest
 
-generate: .venv ## Render corpus locally (no Azure)
+generate: .venv ## Render corpus locally
 	$(call header,Generating credit policies)
 	$(UV) run talos generate policy --local-only
-
-deploy: .venv ## Provision Foundry IQ + agent (`talos deploy --wait`)
-	$(call need-terraform)
 	$(call header,Generating client applications)
 	$(UV) run talos generate application --all --force --local-only
+
+deploy: .venv infra-create ## Provision Foundry IQ + agent
+	$(call need-terraform)
 	$(call header,Deploying Foundry IQ)
 	$(UV) run talos deploy --wait
 
@@ -141,7 +137,7 @@ infra-backend-destroy:
 	$(call header,Deleting tfstate backend)
 	az group delete --name $(TFSTATE_RG) --yes
 
-infra-fmt: ## terraform fmt in infra/
+infra-fmt:
 	$(call need-terraform)
 	$(call header,Terraform fmt)
 	terraform -chdir=infra fmt
@@ -157,7 +153,7 @@ infra-init: infra-fmt
 		-backend-config="storage_account_name=$(TFSTATE_ACCOUNT)" \
 		-backend-config="key=$(ENV).tfstate"
 
-infra-validate: infra-init ## terraform validate in infra/ (ENV=dev1|prd1)
+infra-validate: infra-init
 	$(call header,Terraform validate $(ENV))
 	terraform -chdir=infra validate
 
