@@ -38,6 +38,7 @@ Remote state lives in resource group `rg-credit-policy-tfstate` (not the workloa
 
 ```bash
 gmake infra-backend-create   # once: tfstate RG + storage
+gmake infra-plan             # terraform plan (ENV=dev1)
 gmake infra-create           # ENV=dev1 by default
 gmake infra-create ENV=prd1
 gmake infra-show             # terraform show for ENV

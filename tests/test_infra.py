@@ -236,6 +236,7 @@ def test_makefile_env_and_var_file(repo_root: Path) -> None:
     assert "-var-file=$(ENV).tfvars" in makefile
     assert "need-env" in makefile
     assert re.search(r"^infra-create:", makefile, re.M)
+    assert re.search(r"^infra-plan:", makefile, re.M)
     assert re.search(r"^infra-show:", makefile, re.M)
     assert re.search(r"^infra-destroy:", makefile, re.M)
     assert re.search(r"^infra-backend-create:", makefile, re.M)
@@ -316,6 +317,16 @@ def test_makefile_infra_create_emits_outputs_json(repo_root: Path) -> None:
     assert "terraform -chdir=infra output -json > infra/outputs.json" in create
     assert "rm -f infra/outputs.json" in destroy
     assert "terraform output" not in destroy
+
+
+def test_makefile_infra_plan(repo_root: Path) -> None:
+    makefile = (repo_root / "Makefile").read_text(encoding="utf-8")
+    plan = _makefile_recipe(makefile, "infra-plan")
+    assert "terraform -chdir=infra plan" in plan
+    assert "-var-file=$(ENV).tfvars" in plan
+    assert "outputs.json" not in plan
+    assert "auto-approve" not in plan
+    assert "infra-plan: infra-init" in makefile
 
 
 def test_gha_deploy_writes_outputs_json(repo_root: Path) -> None:

@@ -54,7 +54,7 @@ rwildcard = $(strip \
 default: help
 
 .PHONY: help check generate deploy
-.PHONY: infra-create infra-show infra-destroy infra infra-init
+.PHONY: infra-create infra-plan infra-show infra-destroy infra infra-init
 .PHONY: infra-backend-create infra-backend-show infra-backend-destroy infra-backend
 .PHONY: e2e clean preflight release major minor patch
 .PHONY: _release-pre _release-bump _release-tag _release-gh
@@ -143,6 +143,11 @@ infra-init:
 	terraform -chdir=infra init -input=false -reconfigure \
 		-backend-config="storage_account_name=$(TFSTATE_ACCOUNT)" \
 		-backend-config="key=$(ENV).tfstate"
+
+infra-plan: infra-init ## terraform plan in infra/ (ENV=dev1|prd1)
+	$(call header,Terraform plan $(ENV))
+	terraform -chdir=infra plan -input=false \
+		-var-file=$(ENV).tfvars
 
 infra-create: infra-init ## terraform apply in infra/; write infra/outputs.json (ENV=dev1|prd1)
 	$(call header,Checking az auth)
