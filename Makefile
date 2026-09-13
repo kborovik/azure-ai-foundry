@@ -151,9 +151,8 @@ infra-create: infra-init ## terraform apply in infra/ (ENV=dev1|prd1, default de
 	terraform -chdir=infra apply -input=false -auto-approve \
 		-var-file=$(ENV).tfvars
 
-infra-show: infra-init ## Show workload terraform state (ENV=dev1|prd1)
-	$(call header,Terraform show $(ENV))
-	terraform -chdir=infra show
+infra-show: ## Show workload terraform state (ENV=dev1|prd1)
+	terraform -chdir=infra show -no-color -var-file=$(ENV).tfvars
 
 infra:
 	$(error gmake infra renamed — use gmake infra-create)
