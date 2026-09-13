@@ -42,6 +42,8 @@ gmake infra-plan             # terraform plan (ENV=dev1)
 gmake infra-create           # ENV=dev1 by default
 gmake infra-create ENV=prd1
 gmake infra-show             # terraform show for ENV
+gmake ai-list                # live Foundry account, project, deployments
+gmake ai-show                # same resources, full JSON
 gmake infra-destroy ENV=dev1
 gmake infra-backend-destroy  # drops the tfstate account
 ```
