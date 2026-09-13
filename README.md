@@ -44,7 +44,7 @@ Equivalent:
 ```bash
 az login
 azd auth login
-azd env new dev
+azd env new credit-policy-demo
 azd env set AZURE_LOCATION swedencentral
 azd env set AZURE_SUBSCRIPTION_ID <subscription>
 azd up
