@@ -73,7 +73,7 @@ class GenerateConfig:
     dry_run: bool = False
     force: bool = False
     fail_if_missing_azure: bool = False
-    use_azd: bool = True
+    use_terraform: bool = True
 
 
 @dataclass(frozen=True)
@@ -168,7 +168,7 @@ def resolve_blob_auth(env: dict[str, str], account_url: str = "") -> BlobAuth:
         raise TalosError(
             "Azure environment is not configured "
             "(missing AZURE_STORAGE_ACCOUNT_URL or AZURE_STORAGE_CONNECTION_STRING). "
-            "Set the variables, run from an azd environment, or pass --account-url / --local-only.",
+            "Set the variables, run `terraform apply` in infra/, or pass --account-url / --local-only.",
             exit_code=2,
         )
     return BlobAuth(kind="credential", account_url=url)
@@ -245,7 +245,7 @@ def run_generate(
 
     want_local = not config.azure_only
     want_azure = not config.local_only
-    env = resolve_generate_env(use_azd=config.use_azd)
+    env = resolve_generate_env(use_terraform=config.use_terraform)
     store = blob_store
     if want_azure and store is None:
         if not azure_generate_configured(env, config.account_url):
@@ -253,7 +253,7 @@ def run_generate(
                 raise TalosError(
                     "Azure environment is not configured "
                     "(missing AZURE_STORAGE_ACCOUNT_URL or AZURE_STORAGE_CONNECTION_STRING). "
-                    "Set the variables, run from an azd environment, or pass --account-url / --local-only.",
+                    "Set the variables, run `terraform apply` in infra/, or pass --account-url / --local-only.",
                     exit_code=2,
                 )
             echo("Azure not configured; writing local files only")

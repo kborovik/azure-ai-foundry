@@ -1,10 +1,11 @@
+import os
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from talos.constants import REQUIRED_ENV
-from talos.env import repo_root as find_repo_root
+from talos.env import fill_missing, load_terraform_output, repo_root as find_repo_root
 from tests.helpers import load_facts, load_golden_queries, load_manifest
 
 _AZURE_ENV_NAMES = (
@@ -15,6 +16,22 @@ _AZURE_ENV_NAMES = (
     "AZURE_LOCATION",
     "AZURE_AI_PROJECT_PRINCIPAL_ID",
 )
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--no-terraform",
+        action="store_true",
+        default=False,
+        help="Do not fill missing env vars from `terraform -chdir=infra output -json`.",
+    )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def fill_terraform_env(request: pytest.FixtureRequest) -> None:
+    if request.config.getoption("--no-terraform"):
+        return
+    fill_missing(os.environ, load_terraform_output())
 
 
 @pytest.fixture(scope="session")

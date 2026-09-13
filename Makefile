@@ -26,18 +26,18 @@ header = $(info $(blue)==> $1 <==$(reset))
 # later words (`--jobserver-auth=...`) also contain `n` and must be ignored.
 dry-run = $(findstring n,$(firstword $(MAKEFLAGS)))
 
-need-azd = $(if $(dry-run),,$(if $(shell command -v azd),,$(error azd not on PATH — https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd)))
+need-terraform = $(if $(dry-run),,$(if $(shell command -v terraform),,$(error terraform not on PATH — https://developer.hashicorp.com/terraform/install)))
 need-az = $(if $(dry-run),,$(if $(shell command -v az),,$(error az CLI required — https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)))
 need-az-auth = $(if $(dry-run),,$(shell az account show >/dev/null 2>&1)$(if $(filter 0,$(.SHELLSTATUS)),,$(error az not authenticated — run: az login)))
-need-azd-auth = $(if $(dry-run),,$(shell azd auth login --check-status >/dev/null 2>&1)$(if $(filter 0,$(.SHELLSTATUS)),,$(error azd not authenticated — run: azd auth login)))
 need-gh = $(if $(dry-run),,$(if $(shell command -v gh),,$(error gh CLI required — https://cli.github.com/)))
 need-gh-auth = $(if $(dry-run),,$(shell gh auth status >/dev/null 2>&1)$(if $(filter 0,$(.SHELLSTATUS)),,$(error gh not authenticated — run: gh auth login)))
 need-clean = $(if $(dry-run),,$(if $(shell git status --porcelain),$(error working tree not clean — commit or stash first)))
 need-part = $(if $(part),,$(error usage: gmake release major|minor|patch))
 
-AZD_ENV ?= credit-policy-demo
+ENV ?= credit-policy-demo
 AZURE_LOCATION ?= swedencentral
 AZURE_SUBSCRIPTION_ID ?= f298e323-efae-4203-ba61-fc3496190479
+export ARM_SUBSCRIPTION_ID ?= $(AZURE_SUBSCRIPTION_ID)
 
 # Recursive glob. `*` skips dot-dirs (.git, .venv).
 rwildcard = $(strip \
@@ -46,7 +46,7 @@ rwildcard = $(strip \
 
 default: help
 
-.PHONY: help check generate deploy bicep e2e clean preflight release major minor patch
+.PHONY: help check generate deploy infra e2e clean preflight release major minor patch
 .PHONY: _release-pre _release-bump _release-tag _release-gh
 
 ###############################################################################
@@ -64,34 +64,29 @@ generate: .venv ## Render corpus locally (no Azure)
 	$(UV) run talos generate --local-only
 
 deploy: .venv ## Provision Foundry IQ + agent (`talos deploy --wait`)
-	$(call need-azd)
+	$(call need-terraform)
 	$(call header,Deploying Foundry IQ)
 	$(UV) run talos deploy --wait
 
-preflight: .venv ## Read-only az / azd session check
+preflight: .venv ## Read-only az / terraform session check
 	$(call need-az)
-	$(call need-azd)
+	$(call need-terraform)
 	$(call need-az-auth)
-	$(call need-azd-auth)
 	$(call header,Azure preflight)
 	az account show --query name -o tsv
-	azd auth login --check-status
-	azd env list
+	terraform version
 
-bicep: ## Check az/azd auth; create env dev; azd up
+infra: ## terraform apply in infra/
 	$(call need-az)
-	$(call need-azd)
+	$(call need-terraform)
 	$(call need-az-auth)
-	$(call need-azd-auth)
-	$(call header,Checking az / azd auth)
+	$(call header,Checking az auth)
 	az account show --query name -o tsv
-	azd auth login --check-status
-	$(call header,Creating azd env $(AZD_ENV))
-	azd env select $(AZD_ENV) >/dev/null 2>&1 || azd env new $(AZD_ENV) --location $(AZURE_LOCATION) --subscription $(AZURE_SUBSCRIPTION_ID) --no-prompt
-	azd env set AZURE_LOCATION $(AZURE_LOCATION)
-	azd env set AZURE_SUBSCRIPTION_ID $(AZURE_SUBSCRIPTION_ID)
-	$(call header,Running azd up)
-	azd up --environment $(AZD_ENV) --no-prompt
+	$(call header,Terraform apply $(ENV) $(AZURE_LOCATION))
+	terraform -chdir=infra init -input=false
+	terraform -chdir=infra apply -input=false -auto-approve \
+		-var='location=$(AZURE_LOCATION)' \
+		-var='environment_name=$(ENV)'
 
 # `gmake e2e FILE=<path-or-stem>` scopes to one test file; unset = live markers.
 e2e_target := $(if $(FILE),$(firstword $(wildcard $(FILE) tests/$(FILE) tests/$(FILE).py)),)
@@ -99,7 +94,7 @@ ifneq ($(filter e2e,$(MAKECMDGOALS)),)
 $(if $(FILE),$(if $(e2e_target),,$(error no test file matches FILE=$(FILE))))
 endif
 
-e2e: check preflight ## Live pytest vs azd env (ingestion / retrieval / agent)
+e2e: check preflight ## Live pytest vs terraform outputs (ingestion / retrieval / agent)
 	$(call header,Live e2e)
 	$(UV) run pytest -m "ingestion or retrieval or agent" --override-ini addopts= $(e2e_target)
 
@@ -178,7 +173,7 @@ uv.lock: pyproject.toml
 # Target-line double-hash descriptions, read with $(file) and split with $(let).
 help-src := $(file < $(firstword $(MAKEFILE_LIST)))
 help-words := $(foreach w,$(subst $(space),$(s),$(help-src)),$(if $(and $(findstring $(s)##$(s),$(w)),$(filter-out \#%,$(w))),$(w)))
-pad-bicep := bicep$(space)$(space)$(space)$(space)$(space)
+pad-infra := infra$(space)$(space)$(space)$(space)$(space)
 pad-check := check$(space)$(space)$(space)$(space)$(space)
 pad-clean := clean$(space)$(space)$(space)$(space)$(space)
 pad-deploy := deploy$(space)$(space)$(space)$(space)

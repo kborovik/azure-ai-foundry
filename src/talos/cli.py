@@ -83,9 +83,9 @@ def cli() -> None:
     help="Exit 2 if Azure storage is not configured.",
 )
 @click.option(
-    "--no-azd",
+    "--no-terraform",
     is_flag=True,
-    help="Do not fill missing env vars from `azd env get-values`.",
+    help="Do not fill missing env vars from `terraform -chdir=infra output -json`.",
 )
 def generate(
     out: Path | None,
@@ -98,7 +98,7 @@ def generate(
     dry_run: bool,
     force: bool,
     fail_if_missing_azure: bool,
-    no_azd: bool,
+    no_terraform: bool,
 ) -> None:
     """Render synthetic credit-policy Markdown. Does not run the Search indexer."""
     try:
@@ -114,7 +114,7 @@ def generate(
             dry_run=dry_run,
             force=force,
             fail_if_missing_azure=fail_if_missing_azure,
-            use_azd=not no_azd,
+            use_terraform=not no_terraform,
         )
         run_generate(config, echo=click.echo)
     except TalosError as exc:
@@ -179,9 +179,9 @@ def generate(
     "--dry-run", is_flag=True, help="Print the deploy plan without calling Azure."
 )
 @click.option(
-    "--no-azd",
+    "--no-terraform",
     is_flag=True,
-    help="Do not fill missing env vars from `azd env get-values`.",
+    help="Do not fill missing env vars from `terraform -chdir=infra output -json`.",
 )
 def deploy(
     search_endpoint: str | None,
@@ -201,11 +201,11 @@ def deploy(
     skip_indexer_run: bool,
     skip_endpoint_patch: bool,
     dry_run: bool,
-    no_azd: bool,
+    no_terraform: bool,
 ) -> None:
     """Provision Foundry IQ (knowledge source, indexer, knowledge base, MCP connection, agent)."""
     try:
-        env = resolve_env(use_azd=not no_azd)
+        env = resolve_env(use_terraform=not no_terraform)
         config = DeployConfig(
             search_endpoint=_first(search_endpoint, env.get("AZURE_SEARCH_ENDPOINT")),
             project_endpoint=_first(

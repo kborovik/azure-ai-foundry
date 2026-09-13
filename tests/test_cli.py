@@ -43,13 +43,13 @@ def test_deploy_help_documents_plan_flags() -> None:
         "--skip-indexer-run",
         "--skip-endpoint-patch",
         "--dry-run",
-        "--no-azd",
+        "--no-terraform",
     ):
         assert flag in result.output
 
 
 def test_deploy_missing_env_exits_2(clean_azure_env: None) -> None:
-    result = CliRunner().invoke(cli, ["deploy", "--no-azd"])
+    result = CliRunner().invoke(cli, ["deploy", "--no-terraform"])
     assert result.exit_code == 2
     assert "Azure environment is not configured" in result.output
 
@@ -60,7 +60,7 @@ def test_deploy_dry_run_prints_plan(clean_azure_env: None) -> None:
         [
             "deploy",
             "--dry-run",
-            "--no-azd",
+            "--no-terraform",
             "--search-endpoint",
             SEARCH,
             "--project-endpoint",
@@ -101,7 +101,7 @@ def test_deploy_flags_override_env(
     monkeypatch.setenv("AZURE_AI_SERVICES_ENDPOINT", AI_SERVICES)
     result = CliRunner().invoke(
         cli,
-        ["deploy", "--dry-run", "--no-azd", "--search-endpoint", SEARCH],
+        ["deploy", "--dry-run", "--no-terraform", "--search-endpoint", SEARCH],
     )
     assert result.exit_code == 0, result.output
     assert f"search: {SEARCH}" in result.output
@@ -116,12 +116,12 @@ def test_deploy_reads_canonical_env_without_flags(
     monkeypatch.setenv("AZURE_AI_PROJECT_RESOURCE_ID", PROJECT_ID)
     monkeypatch.setenv("AZURE_STORAGE_RESOURCE_ID", STORAGE_ID)
     monkeypatch.setenv("AZURE_AI_SERVICES_ENDPOINT", AI_SERVICES)
-    result = CliRunner().invoke(cli, ["deploy", "--dry-run", "--no-azd"])
+    result = CliRunner().invoke(cli, ["deploy", "--dry-run", "--no-terraform"])
     assert result.exit_code == 0, result.output
     assert f"search: {SEARCH}" in result.output
 
 
-def test_deploy_no_azd_does_not_read_dotenv(
+def test_deploy_no_terraform_does_not_read_dotenv(
     clean_azure_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     dotenv = tmp_path / ".env"
@@ -140,7 +140,7 @@ def test_deploy_no_azd_does_not_read_dotenv(
     )
     monkeypatch.setattr("talos.env.repo_root", lambda: tmp_path)
     monkeypatch.chdir(tmp_path)
-    result = CliRunner().invoke(cli, ["deploy", "--dry-run", "--no-azd"])
+    result = CliRunner().invoke(cli, ["deploy", "--dry-run", "--no-terraform"])
     assert result.exit_code == 2
     assert "Azure environment is not configured" in result.output
 

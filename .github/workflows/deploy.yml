@@ -16,7 +16,7 @@ jobs:
       AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      AZD_ENV_NAME: ${{ vars.AZD_ENV_NAME }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
@@ -30,27 +30,12 @@ jobs:
           client-id: ${{ env.AZURE_CLIENT_ID }}
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
-      - name: Install Azure Developer CLI
-        uses: Azure/setup-azd@v2
-      - name: Select azd environment
-        run: |
-          set -euo pipefail
-          azd config set auth.useAzCliAuth true
-          azd env select "${AZD_ENV_NAME}"
-      - name: Export azd outputs
-        run: |
-          set -euo pipefail
-          while IFS= read -r line; do
-            trimmed="${line#"${line%%[![:space:]]*}"}"
-            [[ -z "$trimmed" || "$trimmed" == \#* ]] && continue
-            key="${trimmed%%=*}"
-            value="${trimmed#*=}"
-            value="${value%\"}"
-            value="${value#\"}"
-            value="${value%\'}"
-            value="${value#\'}"
-            printf '%s=%s\n' "$key" "$value" >> "$GITHUB_ENV"
-          done < <(azd env get-values)
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: Terraform init
+        run: terraform -chdir=infra init -input=false
       - name: Deploy Foundry IQ and agent
         run: uv run talos deploy --wait
       - name: Run live tests

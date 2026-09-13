@@ -37,7 +37,7 @@ def _generate_args(out: Path, *extra: str) -> list[str]:
         str(FACTS),
         "--templates",
         str(TEMPLATES),
-        "--no-azd",
+        "--no-terraform",
         *extra,
     ]
 
@@ -54,7 +54,7 @@ def test_generate_help_documents_flags() -> None:
         "--dry-run",
         "--force",
         "--fail-if-missing-azure",
-        "--no-azd",
+        "--no-terraform",
     ):
         assert flag in result.output
 
@@ -132,7 +132,7 @@ def test_duplicate_fact_key_exits_3(tmp_path: Path) -> None:
             str(facts_path),
             "--templates",
             str(TEMPLATES),
-            "--no-azd",
+            "--no-terraform",
         ],
     )
     assert result.exit_code == 3, result.output
@@ -154,7 +154,7 @@ def test_invalid_yaml_exits_3(tmp_path: Path) -> None:
             str(facts_path),
             "--templates",
             str(TEMPLATES),
-            "--no-azd",
+            "--no-terraform",
         ],
     )
     assert result.exit_code == 3, result.output
@@ -162,7 +162,7 @@ def test_invalid_yaml_exits_3(tmp_path: Path) -> None:
 
 def test_local_and_azure_only_are_mutex() -> None:
     result = CliRunner().invoke(
-        cli, ["generate", "--local-only", "--azure-only", "--no-azd"]
+        cli, ["generate", "--local-only", "--azure-only", "--no-terraform"]
     )
     assert result.exit_code == 1, result.output
     assert "mutually exclusive" in result.output
@@ -170,14 +170,14 @@ def test_local_and_azure_only_are_mutex() -> None:
 
 def test_fail_if_missing_azure_exits_2(clean_azure_env: None) -> None:
     result = CliRunner().invoke(
-        cli, ["generate", "--fail-if-missing-azure", "--no-azd"]
+        cli, ["generate", "--fail-if-missing-azure", "--no-terraform"]
     )
     assert result.exit_code == 2, result.output
     assert "Azure environment is not configured" in result.output
 
 
 def test_azure_only_missing_env_exits_2(clean_azure_env: None) -> None:
-    result = CliRunner().invoke(cli, ["generate", "--azure-only", "--no-azd"])
+    result = CliRunner().invoke(cli, ["generate", "--azure-only", "--no-terraform"])
     assert result.exit_code == 2, result.output
 
 
@@ -214,7 +214,7 @@ def _azure_config(out: Path, **overrides: object) -> GenerateConfig:
         out=out,
         facts_path=FACTS,
         templates_dir=TEMPLATES,
-        use_azd=False,
+        use_terraform=False,
         account_url="https://stcpdemo.blob.core.windows.net",
     )
     values.update(overrides)
@@ -388,7 +388,7 @@ def test_cli_generate_uploads_when_azure_configured(
             str(FACTS),
             "--templates",
             str(TEMPLATES),
-            "--no-azd",
+            "--no-terraform",
         ],
     )
     assert result.exit_code == 0, result.output

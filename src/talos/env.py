@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from collections.abc import MutableMapping
 from pathlib import Path
+from typing import Any
 
-from talos.constants import REQUIRED_ENV
+from talos.constants import CANONICAL_ENV, REQUIRED_ENV
 from talos.errors import TalosError
+
+_TERRAFORM_OUTPUT_TIMEOUT = 15
 
 
 def repo_root() -> Path:
@@ -17,30 +21,46 @@ def repo_root() -> Path:
     return Path.cwd()
 
 
-def parse_azd_values(text: str) -> dict[str, str]:
+def parse_terraform_output(text: str) -> dict[str, str]:
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(data, dict):
+        return {}
     values: dict[str, str] = {}
-    for raw in text.splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
+    for key, spec in data.items():
+        value: Any
+        if isinstance(spec, dict) and "value" in spec:
+            value = spec["value"]
+        else:
+            value = spec
+        if value is None:
             continue
-        key, value = line.split("=", 1)
-        values[key.strip()] = value.strip().strip("\"'")
+        rendered = value if isinstance(value, str) else str(value)
+        if rendered:
+            values[str(key)] = rendered
     return values
 
 
-def load_azd_env() -> dict[str, str]:
+def load_terraform_output() -> dict[str, str]:
+    infra = repo_root() / "infra"
     try:
         proc = subprocess.run(
-            ["azd", "env", "get-values"],
+            ["terraform", f"-chdir={infra}", "output", "-json"],
             check=False,
             capture_output=True,
             text=True,
+            timeout=_TERRAFORM_OUTPUT_TIMEOUT,
         )
-    except FileNotFoundError:
+    except FileNotFoundError, subprocess.TimeoutExpired:
         return {}
     if proc.returncode != 0:
         return {}
-    return parse_azd_values(proc.stdout)
+    parsed = parse_terraform_output(proc.stdout)
+    return {
+        key: value for key, value in parsed.items() if key in CANONICAL_ENV and value
+    }
 
 
 def fill_missing(env: MutableMapping[str, str], extra: dict[str, str]) -> None:
@@ -49,13 +69,13 @@ def fill_missing(env: MutableMapping[str, str], extra: dict[str, str]) -> None:
             env[key] = value
 
 
-def resolve_env(*, use_azd: bool) -> dict[str, str]:
+def resolve_env(*, use_terraform: bool) -> dict[str, str]:
     env = dict(os.environ)
-    if not use_azd:
+    if not use_terraform:
         return env
     if not missing_required(env):
         return env
-    fill_missing(env, load_azd_env())
+    fill_missing(env, load_terraform_output())
     return env
 
 
@@ -67,13 +87,13 @@ def azure_generate_configured(env: dict[str, str], account_url: str = "") -> boo
     )
 
 
-def resolve_generate_env(*, use_azd: bool) -> dict[str, str]:
+def resolve_generate_env(*, use_terraform: bool) -> dict[str, str]:
     env = dict(os.environ)
-    if not use_azd:
+    if not use_terraform:
         return env
     if azure_generate_configured(env):
         return env
-    fill_missing(env, load_azd_env())
+    fill_missing(env, load_terraform_output())
     return env
 
 
@@ -87,7 +107,7 @@ def require_env(env: dict[str, str]) -> None:
         names = ", ".join(missing)
         raise TalosError(
             f"Azure environment is not configured (missing {names}). "
-            "Set the variables, run from an azd environment, "
+            "Set the variables, run `terraform apply` in infra/, "
             "or pass CLI flags.",
             exit_code=2,
         )

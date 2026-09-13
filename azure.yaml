@@ -1,6 +1,0 @@
-name: credit-policy-agent
-metadata:
-  template: credit-policy-agent@0.0.1
-infra:
-  path: infra
-  module: main

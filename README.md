@@ -31,28 +31,26 @@ sequenceDiagram
 
 ## Azure Infrastructure
 
-Azure Developer CLI (`azd`) with Bicep provision Storage, Azure AI Search (Basic), and a Microsoft Foundry project with `gpt-5-mini` and `text-embedding-3-large`. 
+Terraform CLI in `infra/` provisions Storage, Azure AI Search (Basic), and a Microsoft Foundry project with `gpt-5-mini` and `text-embedding-3-large`. There is no `azure.yaml` and no Azure Developer CLI (`azd`).
 
 **Create Azure resources**
 
 ```bash
-gmake bicep
+gmake infra
 ```
 
 Equivalent:
 
 ```bash
 az login
-azd auth login
-azd env new credit-policy-demo
-azd env set AZURE_LOCATION swedencentral
-azd env set AZURE_SUBSCRIPTION_ID <subscription>
-azd up
+export ARM_SUBSCRIPTION_ID=<subscription>
+terraform -chdir=infra init
+terraform -chdir=infra apply -var='location=swedencentral' -var='environment_name=credit-policy-demo'
 ```
 
-`azd up` deploys the resource group, Storage, Search, Foundry, model deployments, and RBAC. It does not create Foundry IQ objects.
+`terraform apply` deploys the resource group, Storage, Search, Foundry, model deployments, and RBAC. It does not create Foundry IQ objects.
 
-`uv run talos generate` and `uv run talos deploy` fill missing canonical names from `azd env get-values` unless you pass `--no-azd`. CLI flags override process environment variables. A stray `.env` is gitignored and is not loaded.
+`uv run talos generate` and `uv run talos deploy` fill missing canonical names from `terraform -chdir=infra output -json` unless you pass `--no-terraform`. CLI flags override process environment variables. A stray `.env` is gitignored and is not loaded. Terraform state (`*.tfstate`) is gitignored and is never committed.
 
 ## Talos CLI
 
@@ -66,6 +64,6 @@ uv run talos deploy --help
 ## GitHub Actions
 
 - [`.github/workflows/test.yml`](.github/workflows/test.yml) — every push and pull request: `uv run talos test` (unit marker, CPython 3.14).
-- [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) — GitHub **release** `published` only (when `AZURE_CLIENT_ID` is set): OIDC login, `azd env select`, `uv run talos deploy --wait`, then live pytest markers.
+- [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) — GitHub **release** `published` only (when `AZURE_CLIENT_ID` is set): OIDC login, `terraform -chdir=infra init`, `uv run talos deploy --wait`, then live pytest markers.
 
-Create a GitHub environment `credit-policy-live` and repository variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZD_ENV_NAME`. Federate a user-assigned identity to that environment. Do not put secrets in git.
+Create a GitHub environment `credit-policy-live` and repository variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`. Federate a user-assigned identity to that environment. CI reads Terraform outputs when state is available; otherwise set the canonical Azure env vars on that environment. Do not put secrets in git.

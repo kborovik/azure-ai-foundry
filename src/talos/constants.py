@@ -80,6 +80,18 @@ REQUIRED_ENV = (
     "AZURE_AI_SERVICES_ENDPOINT",
 )
 
+CANONICAL_ENV = (
+    "AZURE_LOCATION",
+    "AZURE_RESOURCE_GROUP",
+    "AZURE_STORAGE_ACCOUNT_URL",
+    "AZURE_STORAGE_RESOURCE_ID",
+    "AZURE_SEARCH_ENDPOINT",
+    "AZURE_AI_PROJECT_ENDPOINT",
+    "AZURE_AI_PROJECT_RESOURCE_ID",
+    "AZURE_AI_SERVICES_ENDPOINT",
+    "AZURE_AI_PROJECT_PRINCIPAL_ID",
+)
+
 KS_DESCRIPTION = (
     "Synthetic Contoso Demo Bank credit policies: residential mortgage LTV/DTI, "
     "commercial real estate, unsecured consumer, SME lending, exceptions and override "
