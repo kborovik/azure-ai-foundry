@@ -13,20 +13,19 @@ This repository is a **demo**, not a production credit system. It shows a Foundr
 ```mermaid
 sequenceDiagram
   participant U as Microsoft Teams
-  participant BOT as Azure AI Bot Service
-  participant A as Microsoft Foundry
-  participant SEARCH as Azure AI Search
+  participant BOT as Azure Bot
+  participant A as Foundry Agent Service
+  participant IQ as Foundry IQ
 
   U->>BOT: 1:1 chat
-  BOT->>A: Activity
-  Note over BOT,A: Activity to Responses
-  A->>A: system instructions
-  A->>SEARCH: retrieve
-  SEARCH->>SEARCH: query plan
-  SEARCH->>SEARCH: hybrid search + rerank
-  SEARCH-->>A: extractive + citations
-  A->>A: grounded answer, refuse if empty
-  A-->>U: text + citations
+  BOT->>A: Activity to Responses
+  Note over A: prompt agent + MCP tool
+  A->>IQ: knowledge_base_retrieve
+  IQ->>IQ: query plan, hybrid search, rerank
+  IQ-->>A: extractive chunks + citations
+  A->>A: grounded answer, or refuse if empty
+  A-->>BOT: text + citations
+  BOT-->>U: 1:1 reply
 ```
 
 ## Azure Infrastructure
