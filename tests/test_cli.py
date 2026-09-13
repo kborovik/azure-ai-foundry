@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sys
 import tomllib
 from pathlib import Path
@@ -25,13 +26,15 @@ STORAGE_ID = (
 AI_SERVICES = "https://aif-cp-demo.services.ai.azure.com"
 
 
-def test_root_help_lists_generate_deploy_publish_and_test() -> None:
+def test_root_help_lists_generate_deploy_and_publish() -> None:
     result = CliRunner().invoke(cli, ["--help"])
     assert result.exit_code == 0
     assert "generate" in result.output
     assert "deploy" in result.output
     assert "publish" in result.output
-    assert "test" in result.output
+    missing = CliRunner().invoke(cli, ["test"])
+    assert missing.exit_code != 0
+    assert "No such command" in missing.output
 
 
 def test_deploy_help_documents_plan_flags() -> None:
@@ -178,17 +181,24 @@ def test_deploy_no_terraform_does_not_read_dotenv(
     assert "Azure environment is not configured" in result.output
 
 
-def test_test_command_forwards_args(monkeypatch: pytest.MonkeyPatch) -> None:
-    seen: list[list[str]] = []
+def test_cli_has_no_pytest_main() -> None:
+    text = (repo_root() / "src" / "talos" / "cli.py").read_text(encoding="utf-8")
+    assert "pytest.main" not in text
+    assert "import pytest" not in text
 
-    def fake_main(args: list[str]) -> int:
-        seen.append(list(args))
-        return 0
 
-    monkeypatch.setattr("pytest.main", fake_main)
-    result = CliRunner().invoke(cli, ["test", "-q", "-m", "unit"])
-    assert result.exit_code == 0, result.output
-    assert seen == [["-q", "-m", "unit"]]
+def test_makefile_test_runs_pytest_and_check_calls_test() -> None:
+    makefile = (repo_root() / "Makefile").read_text(encoding="utf-8")
+    assert "talos test" not in makefile
+    test_match = re.search(r"^test:[^\n]*\n((?:[ \t].*\n)*)", makefile, re.M)
+    assert test_match is not None
+    assert "$(UV) run pytest" in test_match.group(1)
+    check_match = re.search(r"^check:[^\n]*\n((?:[ \t].*\n)*)", makefile, re.M)
+    assert check_match is not None
+    check = check_match.group(1)
+    assert "ruff format --check" in check
+    assert "ruff check" in check
+    assert "$(MAKE) test" in check
 
 
 def test_pyproject_talos_cli_contract() -> None:
@@ -207,7 +217,8 @@ def test_src_has_no_pep_723_scripts() -> None:
         assert "# /// script" not in text, path
 
 
-def test_gha_unit_workflow_calls_talos() -> None:
+def test_gha_unit_workflow_calls_pytest() -> None:
     text = (repo_root() / ".github/workflows/test.yml").read_text(encoding="utf-8")
     assert "uv python install 3.14" in text
-    assert "uv run talos test" in text
+    assert "uv run pytest" in text
+    assert "talos test" not in text

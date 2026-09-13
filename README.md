@@ -83,6 +83,8 @@ uv run talos deploy --help
 uv run talos deploy --wait                    # blob-sync both corpora, two KS, two indexers
 uv run talos publish --dry-run                # optional Teams Just-you REST
 uv run talos publish
+gmake test                                    # unit pytest (marker unit)
+gmake check                                   # ruff + unit tests
 ```
 
 `talos generate` is a Click group. `talos generate policy` renders the committed 12 policy files and does not run deploy. `talos generate application` calls Foundry `gpt-5-mini` for a unique SyntheticBorrower (`--type` or `--all`; `--force` to overwrite a slot). Generated applications under `data/client-applications/` are gitignored. `talos deploy` hash-skips blob upload of both local corpora, PUTs `ks-credit-policies` and `ks-client-applications`, runs both indexers, and PUTs `kb-credit-policies` with both sources.
@@ -91,7 +93,7 @@ Teams publish is Just you (`BotServiceRbac`). Portal Direct publish or optional 
 
 ## GitHub Actions
 
-- [`.github/workflows/test.yml`](.github/workflows/test.yml) — every push and pull request: `uv run talos test` (unit marker, CPython 3.14).
+- [`.github/workflows/test.yml`](.github/workflows/test.yml) — every push and pull request: `uv run pytest` (unit marker, CPython 3.14).
 - [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) — GitHub **release** `published` only (when `AZURE_CLIENT_ID` is set): OIDC login, `terraform -chdir=infra init` with backend key `prd1.tfstate`, write `infra/outputs.json`, `uv run talos deploy --wait`, then live pytest markers.
 
 Create a GitHub environment `credit-policy-live` and repository variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`. Federate a user-assigned identity to that environment. CI writes `infra/outputs.json` from Terraform state when it is available; otherwise set the canonical Azure env vars on that environment. Do not put secrets in git.

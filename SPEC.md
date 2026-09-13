@@ -95,7 +95,7 @@ T17|x|swap standing init assert+docs `-migrate-state` → `-reconfigure`|V30,B1,
 T18|x|swap `talos generate` → Click group `policy` (existing render, ! deploy) + `application`; bare generate → help exit 2|V10,I.cmd
 T19|x|add `talos generate application`: unique SyntheticBorrower, `--type`/`--all`/`--force`, validate+retry, gitignore `data/client-applications/*.md`+manifest, optional blob hash-skip|V2,V5,V8,V22,V26,V32,I.cmd,I.file
 T20|x|extend `agents/credit-policy-agent.instructions.md` EvaluationMode: id or customer_name, ask if missing, judgement cites policy docs only|V1,V3,V27,V31,I.agent
-T21|.|drop `talos test` Click; Makefile `test` → `uv run pytest`; `check` calls test; GHA unit `uv run pytest`; drop CLI pytest.main + forwarding test + GHA `talos test` assert|V20,I.cmd,I.make,I.pytest
+T21|x|drop `talos test` Click; Makefile `test` → `uv run pytest`; `check` calls test; GHA unit `uv run pytest`; drop CLI pytest.main + forwarding test + GHA `talos test` assert|V20,I.cmd,I.make,I.pytest
 
 ## §B BUGS
 

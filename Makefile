@@ -53,7 +53,7 @@ rwildcard = $(strip \
 
 default: help
 
-.PHONY: help check generate deploy infra infra-backend
+.PHONY: help test check generate deploy infra infra-backend
 .PHONY: infra-create infra-plan infra-fmt infra-validate infra-show infra-destroy infra infra-init
 .PHONY: infra-backend-create infra-backend-show infra-backend-destroy infra-backend
 .PHONY: e2e clean preflight release major minor patch
@@ -63,11 +63,15 @@ default: help
 # Tests and local loop
 ###############################################################################
 
-check: .venv ## Format check, lint, unit tests (no Azure)
+test: .venv ## Unit tests (no Azure)
 	$(call header,Running unit tests)
+	$(UV) run pytest
+
+check: .venv ## Format check, lint, unit tests (no Azure)
+	$(call header,Checking)
 	$(UV) run ruff format --check
 	$(UV) run ruff check
-	$(UV) run talos test
+	$(MAKE) test
 
 generate: .venv ## Render corpus locally (no Azure)
 	$(call header,Generating credit policies)
@@ -270,6 +274,7 @@ help-src := $(file < $(firstword $(MAKEFILE_LIST)))
 help-words := $(foreach w,$(subst $(space),$(s),$(help-src)),$(if $(and $(findstring $(s)##$(s),$(w)),$(filter-out \#%,$(w))),$(w)))
 pad-check := check$(space)$(space)$(space)$(space)$(space)
 pad-clean := clean$(space)$(space)$(space)$(space)$(space)
+pad-test := test$(space)$(space)$(space)$(space)$(space)$(space)
 pad-deploy := deploy$(space)$(space)$(space)$(space)
 pad-generate := generate$(space)$(space)
 pad-infra-fmt := infra-fmt$(space)

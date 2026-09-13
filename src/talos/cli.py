@@ -35,7 +35,7 @@ from talos.provision import DeployConfig, run_deploy
 @click.group()
 @click.version_option(version=__version__, prog_name="talos")
 def cli() -> None:
-    """Generate, deploy, publish, and test the credit-policy agent on Microsoft Foundry."""
+    """Generate, deploy, and publish the credit-policy agent on Microsoft Foundry."""
 
 
 @cli.group(invoke_without_command=True)
@@ -506,21 +506,6 @@ def publish(
     except TalosError as exc:
         click.echo(str(exc), err=True)
         raise SystemExit(exc.exit_code) from exc
-
-
-@cli.command(
-    context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
-)
-@click.pass_context
-def test(ctx: click.Context) -> None:
-    """Run pytest. Extra args are forwarded (default marker: unit)."""
-    args = list(ctx.args)
-    if args in (["--help"], ["-h"]):
-        click.echo(ctx.get_help())
-        return
-    import pytest
-
-    raise SystemExit(pytest.main(args))
 
 
 def _first(*values: str | None) -> str:
