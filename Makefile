@@ -54,7 +54,7 @@ rwildcard = $(strip \
 default: help
 
 .PHONY: help check generate deploy
-.PHONY: infra-create infra-plan infra-show infra-destroy infra infra-init
+.PHONY: infra-create infra-plan infra-fmt infra-validate infra-show infra-destroy infra infra-init
 .PHONY: infra-backend-create infra-backend-show infra-backend-destroy infra-backend
 .PHONY: e2e clean preflight release major minor patch
 .PHONY: _release-pre _release-bump _release-tag _release-gh
@@ -133,7 +133,12 @@ infra-backend-destroy:
 	$(call header,Deleting tfstate backend)
 	az group delete --name $(TFSTATE_RG) --yes
 
-infra-init:
+infra-fmt: ## terraform fmt in infra/
+	$(call need-terraform)
+	$(call header,Terraform fmt)
+	terraform -chdir=infra fmt
+
+infra-init: infra-fmt
 	$(call need-env)
 	$(call need-az)
 	$(call need-terraform)
@@ -144,12 +149,16 @@ infra-init:
 		-backend-config="storage_account_name=$(TFSTATE_ACCOUNT)" \
 		-backend-config="key=$(ENV).tfstate"
 
-infra-plan: infra-init ## terraform plan in infra/ (ENV=dev1|prd1)
+infra-validate: infra-init ## terraform validate in infra/ (ENV=dev1|prd1)
+	$(call header,Terraform validate $(ENV))
+	terraform -chdir=infra validate
+
+infra-plan: infra-validate ## terraform plan in infra/ (ENV=dev1|prd1)
 	$(call header,Terraform plan $(ENV))
 	terraform -chdir=infra plan -input=false \
 		-var-file=$(ENV).tfvars
 
-infra-create: infra-init ## terraform apply in infra/; write infra/outputs.json (ENV=dev1|prd1)
+infra-create: infra-validate ## terraform apply in infra/; write infra/outputs.json (ENV=dev1|prd1)
 	$(call header,Checking az auth)
 	az account show --query name -o tsv
 	$(call header,Terraform apply $(ENV))
@@ -255,6 +264,7 @@ pad-check := check$(space)$(space)$(space)$(space)$(space)
 pad-clean := clean$(space)$(space)$(space)$(space)$(space)
 pad-deploy := deploy$(space)$(space)$(space)$(space)
 pad-generate := generate$(space)$(space)
+pad-infra-fmt := infra-fmt$(space)
 pad-preflight := preflight$(space)
 pad-release := release$(space)$(space)$(space)
 pad-e2e := e2e$(space)$(space)$(space)$(space)$(space)$(space)$(space)

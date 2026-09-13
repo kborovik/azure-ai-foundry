@@ -237,6 +237,8 @@ def test_makefile_env_and_var_file(repo_root: Path) -> None:
     assert "need-env" in makefile
     assert re.search(r"^infra-create:", makefile, re.M)
     assert re.search(r"^infra-plan:", makefile, re.M)
+    assert re.search(r"^infra-fmt:", makefile, re.M)
+    assert re.search(r"^infra-validate:", makefile, re.M)
     assert re.search(r"^infra-show:", makefile, re.M)
     assert re.search(r"^infra-destroy:", makefile, re.M)
     assert re.search(r"^infra-backend-create:", makefile, re.M)
@@ -326,7 +328,27 @@ def test_makefile_infra_plan(repo_root: Path) -> None:
     assert "-var-file=$(ENV).tfvars" in plan
     assert "outputs.json" not in plan
     assert "auto-approve" not in plan
-    assert "infra-plan: infra-init" in makefile
+    assert "infra-plan: infra-validate" in makefile
+
+
+def test_makefile_infra_fmt_and_validate(repo_root: Path) -> None:
+    makefile = (repo_root / "Makefile").read_text(encoding="utf-8")
+    fmt = _makefile_recipe(makefile, "infra-fmt")
+    validate = _makefile_recipe(makefile, "infra-validate")
+    assert "terraform -chdir=infra fmt" in fmt
+    assert "need-terraform" in fmt
+    assert "infra-init" not in fmt
+    assert "-var-file" not in fmt
+    assert "terraform -chdir=infra validate" in validate
+    assert "-var-file" not in validate
+    assert "auto-approve" not in fmt
+    assert "auto-approve" not in validate
+    assert re.search(r"^infra-fmt:", makefile, re.M)
+    assert "infra-init: infra-fmt" in makefile
+    assert "infra-validate: infra-init" in makefile
+    assert "infra-plan: infra-validate" in makefile
+    assert "infra-create: infra-validate" in makefile
+    assert "infra-destroy: infra-init" in makefile
 
 
 def test_gha_deploy_writes_outputs_json(repo_root: Path) -> None:
