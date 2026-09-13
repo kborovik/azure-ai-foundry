@@ -31,7 +31,7 @@ Demo Foundry prompt agent answers credit-policy questions only from 12 synthetic
 - agent: Foundry `api-version=v1` `PromptAgentDefinition` model `gpt-5-mini` MCPTool `knowledge_base_retrieve` connection `conn-kb-credit-policies` temperature=0; invoke Responses API `agent_reference`; token scope `https://ai.azure.com/.default`
 - names: env ∈ {dev1, prd1}; RG `rg-credit-policy-${env}`; storage `stcp${resourceToken}`; search `srch-cp-${resourceToken}` SKU basic; Foundry `aif-cp-${resourceToken}` kind AIServices S0; project `credit-policy-demo`; chat deploy `gpt-5-mini` sku GlobalStandard capacity 50 (=50k TPM); embed `text-embedding-3-large` capacity 20; KS `ks-credit-policies`; KB `kb-credit-policies`; conn `conn-kb-credit-policies`; agent `credit-policy-agent`
 - file: `corpus/facts.yaml` SoT unique keys; `corpus/templates/*.md.j2`; committed `data/credit-policies/*.md` + `manifest.json`; `agents/credit-policy-agent.instructions.md`; `tests/fixtures/golden_queries.yaml` (18 ids)
-- infra: terraform CLI; `infra/*.tf`; `infra/dev1.tfvars` + `infra/prd1.tfvars`; apply `-var-file=<env>.tfvars` env ∈ {dev1, prd1} ! `credit-policy-demo`; Makefile `ENV` same set default `dev1`; GHA release backend key `prd1`; azurerm backend Azure AD; bootstrap `infra/backend/` RG `rg-credit-policy-tfstate` container `tfstate` state key `<env>.tfstate` ! workload storage; first init `-migrate-state`; `gmake infra-backend-create` add / `infra-backend-show` print state / `infra-backend-destroy` drop backend; `gmake infra-create` apply / `infra-show` print state / `infra-destroy` drop stack; no azure.yaml; no azd; no agent as terraform resource; no KS in Terraform; `*.tfstate` gitignored never committed
+- infra: terraform CLI; `infra/*.tf`; `infra/dev1.tfvars` + `infra/prd1.tfvars`; apply `-var-file=<env>.tfvars` env ∈ {dev1, prd1} ! `credit-policy-demo`; Makefile `ENV` same set default `dev1`; GHA release backend key `prd1`; azurerm backend Azure AD; bootstrap `az` CLI not terraform ! `infra/backend/` — RG `rg-credit-policy-tfstate` container `tfstate` account `sttfst`+md5(`{subscription_id}-tfstate`)[:13] ! workload `stcp*`; Blob Data Contributor on account; state key `<env>.tfstate`; first workload init `-migrate-state`; `gmake infra-backend-create` `az group`/`storage account`/`container create` / `infra-backend-show` `az` show / `infra-backend-destroy` `az group delete`; `gmake infra-create` apply / `infra-show` print state / `infra-destroy` drop stack; no azure.yaml; no azd; no agent as terraform resource; no KS in Terraform; `*.tfstate` gitignored never committed
 - pytest: markers `unit` `ingestion` `retrieval` `agent` `teams`; live skip w/o canonical env; teams skip unless `E2E_TEAMS=1` (flag set and no client → skip not fail)
 - corpus_ids: CP-RML-2026-01, CP-CRE-2026-01, CP-UCL-2026-01, CP-SME-2026-01, CP-EXC-2026-01, CP-PRO-2026-01, CP-COL-2026-01, CP-DOC-2026-01, CP-RPL-2026-01, CP-ESG-2026-01, CP-CND-2026-01, CP-AUTH-2026-01
 - golden: Q-RML-LTV-OO, Q-RML-DTI, Q-CRE-DSCR, Q-UCL-MAX, Q-SME-PG, Q-COL-AVM, Q-AUTH-RM, Q-CMP-LTV-CRE-ESG, Q-CMP-CONSTRUCTION, Q-NEG-AUTO, Q-NEG-SOVEREIGN, Q-AMB-LTV, Q-CIT-PROHIBITED, Q-MT-EXCEPTION, Q-MT-ESG-FOLLOWUP, Q-ADV-JAILBREAK, Q-ADV-INVENT, Q-DOC-SE
@@ -67,7 +67,7 @@ V26: dual-write-auth — generate Azure path: connection string if set else Defa
 V27: instructions-file — `agents/credit-policy-agent.instructions.md` loaded verbatim into `PromptAgentDefinition.instructions`
 V28: fact-literals — threshold sentences use facts.yaml literals (`80%`, `USD 50,000`, committee names) no rounding no synonyms in SoT sentence
 V29: tfvars-envs — terraform apply `-var-file=dev1.tfvars` or `prd1.tfvars`; `environment_name` ∈ {dev1, prd1}; ! `credit-policy-demo`; Makefile `ENV` same set; GHA release backend key `prd1`
-V30: remote-state — azurerm backend `use_azuread_auth`; bootstrap RG `rg-credit-policy-tfstate` container `tfstate`; blob key `<env>.tfstate`; ! workload `stcp*` account; first `terraform init -migrate-state` local → remote; `*.tfstate` gitignored never committed
+V30: remote-state — azurerm backend `use_azuread_auth`; bootstrap via `az` CLI not terraform ! `infra/backend/`; RG `rg-credit-policy-tfstate` container `tfstate`; account `sttfst`+md5(`{subscription_id}-tfstate`)[:13] ! workload `stcp*`; reconstructible after clone; blob key `<env>.tfstate`; first workload `terraform init -migrate-state` local → remote; `*.tfstate` gitignored never committed
 
 ## §T TASKS
 
@@ -85,6 +85,7 @@ T10|x|load repo-root .env for missing canonical env in talos+pytest; flags>proce
 T11|x|drop `.env` load from talos+pytest; flags>process>azd; drop `.env.example`; keep gitignore `.env`|V15,V17,I.env,I.cmd,I.pytest
 T12|x|swap azd+Bicep → terraform CLI; drop azure.yaml; env fill `terraform -chdir=infra output -json`; flag `--no-terraform`|V11,V15,V23,I.infra,I.env,I.cmd
 T13|x|add azurerm backend + bootstrap; migrate-state; `infra/dev1.tfvars`+`prd1.tfvars`; drop credit-policy-demo; Makefile ENV∈{dev1,prd1}; GHA release prd1|V29,V30,I.infra,I.names
+T14|.|swap infra-backend-* terraform → az CLI; drop `infra/backend/`|V30,I.infra
 
 ## §B BUGS
 
