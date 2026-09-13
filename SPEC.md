@@ -97,7 +97,7 @@ T19|x|add `talos generate application`: unique SyntheticBorrower, `--type`/`--al
 T20|x|extend `agents/credit-policy-agent.instructions.md` EvaluationMode: id or customer_name, ask if missing, judgement cites policy docs only|V1,V3,V27,V31,I.agent
 T21|x|drop `talos test` Click; Makefile `test` → `uv run pytest`; `check` calls test; GHA unit `uv run pytest`; drop CLI pytest.main + forwarding test + GHA `talos test` assert|V20,I.cmd,I.make,I.pytest
 T22|x|swap terraform `local.resource_token` md5(subscription-env-location) → literal `lab5`; `gmake infra-destroy` then `gmake infra-create`|I.names,I.infra,V11
-T23|.|drop terraform variables not in tfvars (`principal_id`, `chat_capacity`, `embedding_capacity`, `project_name`, `chat_deployment_name`, `embedding_deployment_name`) → locals/literals|V29,I.infra
+T23|x|drop terraform variables not in tfvars (`principal_id`, `chat_capacity`, `embedding_capacity`, `project_name`, `chat_deployment_name`, `embedding_deployment_name`) → locals/literals|V29,I.infra
 
 ## §B BUGS
 

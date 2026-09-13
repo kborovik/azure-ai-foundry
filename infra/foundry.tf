@@ -16,10 +16,10 @@ resource "azurerm_cognitive_account" "foundry" {
 }
 
 resource "azurerm_cognitive_account_project" "project" {
-  name                 = var.project_name
+  name                 = local.project_name
   cognitive_account_id = azurerm_cognitive_account.foundry.id
   location             = azurerm_resource_group.rg.location
-  display_name         = var.project_name
+  display_name         = local.project_name
   description          = "Contoso Demo Bank credit policy agent"
   tags                 = local.tags
 
@@ -29,7 +29,7 @@ resource "azurerm_cognitive_account_project" "project" {
 }
 
 resource "azurerm_cognitive_deployment" "chat" {
-  name                 = var.chat_deployment_name
+  name                 = local.chat_deployment_name
   cognitive_account_id = azurerm_cognitive_account.foundry.id
 
   model {
@@ -40,12 +40,12 @@ resource "azurerm_cognitive_deployment" "chat" {
 
   sku {
     name     = "GlobalStandard"
-    capacity = var.chat_capacity
+    capacity = local.chat_capacity
   }
 }
 
 resource "azurerm_cognitive_deployment" "embedding" {
-  name                 = var.embedding_deployment_name
+  name                 = local.embedding_deployment_name
   cognitive_account_id = azurerm_cognitive_account.foundry.id
 
   model {
@@ -56,7 +56,7 @@ resource "azurerm_cognitive_deployment" "embedding" {
 
   sku {
     name     = "Standard"
-    capacity = var.embedding_capacity
+    capacity = local.embedding_capacity
   }
 
   depends_on = [azurerm_cognitive_deployment.chat]

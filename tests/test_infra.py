@@ -114,7 +114,7 @@ def test_models_are_gpt5mini_and_text_embedding_3_large() -> None:
     assert "project_management_enabled    = true" in foundry or re.search(
         r"project_management_enabled\s*=\s*true", foundry
     )
-    assert "credit-policy-demo" in _read("variables.tf")
+    assert "credit-policy-demo" in _read("main.tf")
     assert "azurerm_cognitive_account_project" in foundry
 
 
@@ -157,7 +157,7 @@ def test_resource_names_match_spec() -> None:
     )
     assert "srch-cp-" not in main
     assert "aif-cp-" not in main
-    assert "credit-policy-demo" in _read("variables.tf")
+    assert "credit-policy-demo" in main
     storage = _read("storage.tf")
     assert DEFAULT_CONTAINER in storage
     assert "client-applications" in storage
@@ -190,17 +190,37 @@ def test_local_auth_keys_not_disabled() -> None:
 
 
 def test_chat_capacity_is_50_not_50000() -> None:
-    variables = _read("variables.tf")
+    main = _read("main.tf")
     foundry = _read("foundry.tf")
-    assert "default     = 50" in variables or re.search(
-        r"variable \"chat_capacity\".*?default\s*=\s*50", variables, re.S
-    )
-    assert "capacity = var.chat_capacity" in foundry
-    assert re.search(r"chat_capacity[\s\S]*default\s*=\s*50000", variables) is None
+    assert re.search(r"chat_capacity\s*=\s*50", main)
+    assert re.search(r"embedding_capacity\s*=\s*20", main)
+    assert "capacity = local.chat_capacity" in foundry
+    assert "capacity = local.embedding_capacity" in foundry
+    assert re.search(r"chat_capacity\s*=\s*50000", main) is None
     assert re.search(r"capacity\s*=\s*50000", foundry) is None
-    assert "default     = 20" in variables or re.search(
-        r"variable \"embedding_capacity\".*?default\s*=\s*20", variables, re.S
+
+
+def test_terraform_variables_are_tfvars_keys_only() -> None:
+    variables = _read("variables.tf")
+    names = re.findall(r'^variable "(\S+)"', variables, re.M)
+    assert names == ["environment_name", "location"]
+    for dropped in (
+        "principal_id",
+        "chat_capacity",
+        "embedding_capacity",
+        "project_name",
+        "chat_deployment_name",
+        "embedding_deployment_name",
+    ):
+        assert f'variable "{dropped}"' not in variables
+    main = _read("main.tf")
+    assert re.search(r'project_name\s*=\s*"credit-policy-demo"', main)
+    assert re.search(r'chat_deployment_name\s*=\s*"gpt-5-mini"', main)
+    assert re.search(
+        r'embedding_deployment_name\s*=\s*"text-embedding-3-large"', main
     )
+    assert "var.principal_id" not in main
+    assert "data.azurerm_client_config.current.object_id" in main
 
 
 def test_no_application_insights() -> None:
