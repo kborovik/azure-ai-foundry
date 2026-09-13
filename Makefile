@@ -133,19 +133,12 @@ infra-backend-destroy:
 	$(call header,Deleting tfstate backend)
 	az group delete --name $(TFSTATE_RG) --yes
 
-# Local terraform.tfstate → azurerm: -migrate-state. Later inits / ENV switch: -reconfigure (do not copy state between keys).
 define init-remote
 	az storage account show --name $(TFSTATE_ACCOUNT) --resource-group $(TFSTATE_RG) --output none \
-	  || { echo "backend storage missing — run: gmake infra-backend-create" >&2; exit 1; }; \
-	if [ -f infra/terraform.tfstate ]; then \
-	  terraform -chdir=infra init -input=false -migrate-state -force-copy \
-	    -backend-config="storage_account_name=$(TFSTATE_ACCOUNT)" \
-	    -backend-config="key=$(ENV).tfstate"; \
-	else \
-	  terraform -chdir=infra init -input=false -reconfigure \
-	    -backend-config="storage_account_name=$(TFSTATE_ACCOUNT)" \
-	    -backend-config="key=$(ENV).tfstate"; \
-	fi
+	  || { echo "backend storage missing — run: gmake infra-backend-create" >&2; exit 1; }
+	terraform -chdir=infra init -input=false -reconfigure \
+	  -backend-config="storage_account_name=$(TFSTATE_ACCOUNT)" \
+	  -backend-config="key=$(ENV).tfstate"
 endef
 
 infra-create: ## terraform apply in infra/ (ENV=dev1|prd1, default dev1)
@@ -155,11 +148,10 @@ infra-create: ## terraform apply in infra/ (ENV=dev1|prd1, default dev1)
 	$(call need-az-auth)
 	$(call header,Checking az auth)
 	az account show --query name -o tsv
-	$(call header,Terraform apply $(ENV) $(AZURE_LOCATION))
+	$(call header,Terraform apply $(ENV))
 	$(init-remote)
 	terraform -chdir=infra apply -input=false -auto-approve \
-		-var-file=$(ENV).tfvars \
-		-var='location=$(AZURE_LOCATION)'
+		-var-file=$(ENV).tfvars
 
 infra-show: ## Show workload terraform state (ENV=dev1|prd1)
 	$(call need-env)
@@ -184,8 +176,7 @@ infra-destroy: ## terraform destroy workload stack (ENV=dev1|prd1)
 	$(call header,Terraform destroy $(ENV))
 	$(init-remote)
 	terraform -chdir=infra destroy -input=false -auto-approve \
-		-var-file=$(ENV).tfvars \
-		-var='location=$(AZURE_LOCATION)'
+		-var-file=$(ENV).tfvars
 
 # `gmake e2e FILE=<path-or-stem>` scopes to one test file; unset = live markers.
 e2e_target := $(if $(FILE),$(firstword $(wildcard $(FILE) tests/$(FILE) tests/$(FILE).py)),)
