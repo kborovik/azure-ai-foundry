@@ -52,8 +52,20 @@ def _config(tmp_path: Path, **overrides: object) -> DeployConfig:
         application_dir=tmp_path / "apps",
     )
     values.update(overrides)
-    Path(values["policy_dir"]).mkdir(parents=True, exist_ok=True)  # type: ignore[arg-type]
-    Path(values["application_dir"]).mkdir(parents=True, exist_ok=True)  # type: ignore[arg-type]
+    policy_dir = Path(values["policy_dir"])  # type: ignore[arg-type]
+    application_dir = Path(values["application_dir"])  # type: ignore[arg-type]
+    policy_dir.mkdir(parents=True, exist_ok=True)
+    application_dir.mkdir(parents=True, exist_ok=True)
+    if not any(policy_dir.glob("*.md")):
+        for index in range(12):
+            (policy_dir / f"policy-{index:02d}.md").write_text(
+                "SYNTHETIC — DEMO ONLY\n\n# policy\n", encoding="utf-8"
+            )
+    if not any(application_dir.glob("*.md")):
+        for kind in ("accepted", "rejected", "missing-data"):
+            (application_dir / f"{kind}.md").write_text(
+                "SYNTHETIC — DEMO ONLY\n\n# application\n", encoding="utf-8"
+            )
     return DeployConfig(**values)  # type: ignore[arg-type]
 
 
@@ -74,11 +86,37 @@ def do_deploy(config: DeployConfig, rest: FakeRest, **kwargs: object) -> None:
     _run(config, rest=rest, **kwargs)  # type: ignore[arg-type]
 
 
-def _ks_get_body(indexer: str = "ks-credit-policies-indexer") -> dict:
+def _ks_get_body(
+    indexer: str = "ks-credit-policies-indexer",
+    index: str = "idx-credit-policies",
+) -> dict:
     return {
         "name": "ks-credit-policies",
-        "azureBlobParameters": {"createdResources": {"indexer": indexer}},
+        "azureBlobParameters": {
+            "createdResources": {"indexer": indexer, "index": index}
+        },
     }
+
+
+def _script_index_count(
+    rest: FakeRest, source_name: str, index_name: str, count: int
+) -> None:
+    rest.expect(
+        "GET",
+        f"/knowledgesources/{source_name}?",
+        json_response(
+            200,
+            _ks_get_body(
+                indexer=f"{source_name}-indexer",
+                index=index_name,
+            ),
+        ),
+    )
+    rest.expect(
+        "GET",
+        f"/indexes/{index_name}/docs/$count",
+        json_response(200, count),
+    )
 
 
 def _script_app_source(rest: FakeRest, *, run: bool = True) -> None:
@@ -385,6 +423,7 @@ def test_wait_fails_when_processed_below_minimum(tmp_path: Path) -> None:
         wait=True,
         indexer_status=_done_status(processed=3, failed=0),
     )
+    _script_index_count(rest, "ks-credit-policies", "idx-credit-policies", 2)
     with pytest.raises(TalosError, match="processed 3 items"):
         do_deploy(
             _config(tmp_path, wait=True),
@@ -393,6 +432,22 @@ def test_wait_fails_when_processed_below_minimum(tmp_path: Path) -> None:
             clock=FakeClock(),
             echo=lambda _: None,
         )
+
+
+def test_wait_succeeds_when_partial_sync_index_meets_minimum(tmp_path: Path) -> None:
+    rest = _script_happy_path(
+        FakeRest(),
+        wait=True,
+        indexer_status=_done_status(processed=1, failed=0),
+    )
+    _script_index_count(rest, "ks-credit-policies", "idx-credit-policies", 12)
+    do_deploy(
+        _config(tmp_path, wait=True),
+        rest=rest,
+        agents=FakeAgents(),
+        clock=FakeClock(),
+        echo=lambda _: None,
+    )
 
 
 def test_wait_times_out_when_end_time_never_arrives(tmp_path: Path) -> None:
@@ -593,10 +648,27 @@ def test_wait_fails_when_application_processed_below_minimum(tmp_path: Path) -> 
         wait=True,
         application_status=_done_status(processed=1, failed=0),
     )
+    _script_index_count(
+        rest, "ks-client-applications", "idx-client-applications", 1
+    )
     with pytest.raises(TalosError, match="ks-client-applications"):
         do_deploy(
             _config(tmp_path, wait=True),
             rest=rest,
+            agents=FakeAgents(),
+            clock=FakeClock(),
+            echo=lambda _: None,
+        )
+
+
+def test_wait_fails_when_local_application_corpus_short(tmp_path: Path) -> None:
+    config = _config(tmp_path, wait=True)
+    for path in Path(config.application_dir).glob("*.md"):
+        path.unlink()
+    with pytest.raises(TalosError, match="markdown files"):
+        do_deploy(
+            config,
+            rest=FakeRest(),
             agents=FakeAgents(),
             clock=FakeClock(),
             echo=lambda _: None,
@@ -632,7 +704,8 @@ def test_provision_pins_temperature_zero_and_merge_patch() -> None:
     from talos.env import repo_root as find_root
 
     text = (find_root() / "src/talos/provision.py").read_text(encoding="utf-8")
-    assert "temperature" in text
+    assert 'startswith("gpt-5")' in text
+    assert 'definition_kwargs["temperature"] = 0' in text
     assert 'content_type="application/merge-patch+json"' in text
     assert "version_selector" in text
     assert "DEFAULT_APPLICATION_KNOWLEDGE_SOURCE" in text

@@ -159,12 +159,24 @@ class AzureBlobStore:
         return str(blob.url)
 
 
-def resolve_blob_auth(env: dict[str, str], account_url: str = "") -> BlobAuth:
+def resolve_blob_auth(
+    env: dict[str, str],
+    account_url: str = "",
+    *,
+    purpose: str = "generate",
+) -> BlobAuth:
     connection_string = env.get("AZURE_STORAGE_CONNECTION_STRING") or ""
     if connection_string:
         return BlobAuth(kind="connection_string", connection_string=connection_string)
     url = account_url or env.get("AZURE_STORAGE_ACCOUNT_URL") or ""
     if not url:
+        if purpose == "deploy":
+            raise TalosError(
+                "Azure environment is not configured "
+                "(missing AZURE_STORAGE_ACCOUNT_URL or AZURE_STORAGE_CONNECTION_STRING). "
+                "Set the variables or run `gmake infra-create` (writes `infra/outputs.json`).",
+                exit_code=2,
+            )
         raise TalosError(
             "Azure environment is not configured "
             "(missing AZURE_STORAGE_ACCOUNT_URL or AZURE_STORAGE_CONNECTION_STRING). "
@@ -180,8 +192,9 @@ def open_blob_store(
     container: str,
     account_url: str = "",
     credential: TokenCredential | None = None,
+    purpose: str = "generate",
 ) -> BlobStore:
-    auth = resolve_blob_auth(env, account_url)
+    auth = resolve_blob_auth(env, account_url, purpose=purpose)
     if auth.kind == "connection_string":
         return AzureBlobStore.from_connection_string(auth.connection_string, container)
     from azure.identity import DefaultAzureCredential

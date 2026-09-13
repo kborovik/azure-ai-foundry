@@ -359,6 +359,15 @@ def deploy(
                 "AZURE_AI_SERVICES_ENDPOINT": config.ai_services_endpoint,
             }
         )
+        if not dry_run and not (
+            config.storage_account_url or config.storage_connection_string
+        ):
+            raise TalosError(
+                "Azure environment is not configured "
+                "(missing AZURE_STORAGE_ACCOUNT_URL or AZURE_STORAGE_CONNECTION_STRING). "
+                "Set the variables or run `gmake infra-create` (writes `infra/outputs.json`).",
+                exit_code=2,
+            )
         run_deploy(config, echo=click.echo)
     except TalosError as exc:
         click.echo(str(exc), err=True)

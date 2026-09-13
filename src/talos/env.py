@@ -64,8 +64,6 @@ def resolve_env(*, use_terraform: bool) -> dict[str, str]:
     env = dict(os.environ)
     if not use_terraform:
         return env
-    if not missing_required(env):
-        return env
     fill_missing(env, load_terraform_output())
     return env
 

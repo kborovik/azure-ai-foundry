@@ -75,6 +75,8 @@ generate: .venv ## Render corpus locally (no Azure)
 
 deploy: .venv ## Provision Foundry IQ + agent (`talos deploy --wait`)
 	$(call need-terraform)
+	$(call header,Generating client applications)
+	$(UV) run talos generate application --all --force --local-only
 	$(call header,Deploying Foundry IQ)
 	$(UV) run talos deploy --wait
 

@@ -255,6 +255,13 @@ def test_blob_auth_falls_back_to_env_account_url() -> None:
     assert auth.account_url == "https://env.blob.core.windows.net"
 
 
+def test_blob_auth_deploy_purpose_omits_local_only_hint() -> None:
+    with pytest.raises(TalosError, match="infra/outputs.json") as exc:
+        resolve_blob_auth({}, purpose="deploy")
+    assert exc.value.exit_code == 2
+    assert "--local-only" not in str(exc.value)
+
+
 def test_azure_blob_store_creates_private_container() -> None:
     class Container:
         def __init__(self) -> None:

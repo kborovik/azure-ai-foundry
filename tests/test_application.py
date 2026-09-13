@@ -147,6 +147,17 @@ def test_generate_one_slot_writes_watermarked_markdown(tmp_path: Path) -> None:
     assert parsed["application_id"] == "CA-ACCEPTED-2026-01"
     assert parsed["customer_id"] == "SYN-111111"
     assert parsed["email"].endswith("@example.invalid")
+    assert parsed["facility"]["loan_amount"] == "USD 200,000"
+    assert parsed["narrative"]
+    assert (
+        validate_record(
+            parsed,
+            application_type="accepted",
+            used=set(),
+            required_id="CA-ACCEPTED-2026-01",
+        )
+        == []
+    )
     manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["container"] == "client-applications"
     assert manifest["documents"][0]["application_type"] == "accepted"

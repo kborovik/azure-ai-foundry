@@ -142,9 +142,7 @@ class SdkAgentOps:
                 allowed_tools=["knowledge_base_retrieve"],
                 project_connection_id=connection_name,
             )
-            # V14 wants temperature=0. gpt-5-mini Responses invoke returns 400
-            # "Unsupported parameter: temperature" when the stored definition
-            # includes it, so omit on create for this model pin.
+            # gpt-5* stored definitions reject temperature on invoke.
             definition_kwargs: dict[str, Any] = {
                 "model": model,
                 "instructions": instructions,
@@ -380,6 +378,8 @@ def run_deploy(
     if config.dry_run:
         _echo_dry_run(config, sources, echo)
         return
+    if config.wait:
+        _assert_local_wait_ready(sources)
 
     cred = credential or DefaultAzureCredential()
     rest_client = rest or _require_rest(cred)
@@ -491,6 +491,7 @@ def _sync_corpora(
                 container=source.container,
                 account_url=config.storage_account_url,
                 credential=credential,
+                purpose="deploy",
             )
         sync_markdown_directory(store, source.local_dir, force=False, echo=echo)
 
@@ -574,6 +575,20 @@ def _run_indexer(config: DeployConfig, rest: RestClient, indexer_name: str) -> N
     raise_for_status(response, f"run indexer '{indexer_name}'")
 
 
+def _assert_local_wait_ready(
+    sources: tuple[BlobKnowledgeSource, BlobKnowledgeSource],
+) -> None:
+    for source in sources:
+        count = len(list(source.local_dir.glob("*.md")))
+        if count < source.min_indexed_items:
+            raise TalosError(
+                f"local {source.local_dir} has {count} markdown files; "
+                f"--wait needs at least {source.min_indexed_items}. "
+                "Run `uv run talos generate application --all --local-only` "
+                "for the application corpus."
+            )
+
+
 def _wait_for_sync(
     config: DeployConfig,
     source: BlobKnowledgeSource,
@@ -603,14 +618,13 @@ def _wait_for_sync(
                 )
             if processed >= source.min_indexed_items:
                 return
-            if processed == 0:
-                counted = _index_document_count(config, source, rest)
-                if counted is not None and counted >= source.min_indexed_items:
-                    echo(
-                        f"{source.name} last sync processed 0; "
-                        f"index document count {counted} meets minimum {source.min_indexed_items}"
-                    )
-                    return
+            counted = _index_document_count(config, source, rest)
+            if counted is not None and counted >= source.min_indexed_items:
+                echo(
+                    f"{source.name} last sync processed {processed}; "
+                    f"index document count {counted} meets minimum {source.min_indexed_items}"
+                )
+                return
             raise TalosError(
                 f"knowledge source '{source.name}' processed {processed} items; "
                 f"expected at least {source.min_indexed_items}"

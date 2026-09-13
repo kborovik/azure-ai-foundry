@@ -15,7 +15,7 @@ from talos.constants import (
 )
 from talos.env import repo_root
 from talos.rest import RestClient, RestResponse, raise_for_status
-from tests.helpers import APPLICATION_FIXTURES_RELATIVE, APPLICATION_OUTPUT_RELATIVE
+from tests.helpers import APPLICATION_OUTPUT_RELATIVE
 
 
 def search_url(env: dict[str, str], path: str) -> str:
@@ -125,12 +125,14 @@ def _response_output_text(payload: dict[str, Any]) -> str:
 
 def application_cases() -> list[dict[str, Any]]:
     live = repo_root() / APPLICATION_OUTPUT_RELATIVE
-    base = (
-        live if any(live.glob("*.md")) else repo_root() / APPLICATION_FIXTURES_RELATIVE
-    )
+    if not any(live.glob("*.md")):
+        pytest.skip(
+            "no local data/client-applications/*.md; "
+            "run `uv run talos generate application --all` first"
+        )
     cases: list[dict[str, Any]] = []
     for kind in APPLICATION_TYPES:
-        path = base / f"{kind}.md"
+        path = live / f"{kind}.md"
         if not path.is_file():
             continue
         record = parse_application_markdown(path.read_text(encoding="utf-8"))
