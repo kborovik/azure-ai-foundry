@@ -23,7 +23,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         "--no-terraform",
         action="store_true",
         default=False,
-        help="Do not fill missing env vars from `terraform -chdir=infra output -json`.",
+        help="Do not fill missing env vars from `infra/outputs.json`.",
     )
 
 

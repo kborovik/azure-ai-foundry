@@ -48,6 +48,14 @@ def test_deploy_help_documents_plan_flags() -> None:
         assert flag in result.output
 
 
+def test_no_terraform_help_mentions_outputs_json() -> None:
+    for cmd in ("generate", "deploy"):
+        result = CliRunner().invoke(cli, [cmd, "--help"])
+        assert result.exit_code == 0
+        assert "infra/outputs.json" in result.output
+        assert "terraform -chdir=infra output -json" not in result.output
+
+
 def test_deploy_missing_env_exits_2(clean_azure_env: None) -> None:
     result = CliRunner().invoke(cli, ["deploy", "--no-terraform"])
     assert result.exit_code == 2

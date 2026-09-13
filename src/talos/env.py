@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 from collections.abc import MutableMapping
 from pathlib import Path
 from typing import Any
@@ -10,7 +9,7 @@ from typing import Any
 from talos.constants import CANONICAL_ENV, REQUIRED_ENV
 from talos.errors import TalosError
 
-_TERRAFORM_OUTPUT_TIMEOUT = 15
+OUTPUTS_JSON_RELATIVE = "infra/outputs.json"
 
 
 def repo_root() -> Path:
@@ -44,20 +43,12 @@ def parse_terraform_output(text: str) -> dict[str, str]:
 
 
 def load_terraform_output() -> dict[str, str]:
-    infra = repo_root() / "infra"
+    path = repo_root() / OUTPUTS_JSON_RELATIVE
     try:
-        proc = subprocess.run(
-            ["terraform", f"-chdir={infra}", "output", "-json"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=_TERRAFORM_OUTPUT_TIMEOUT,
-        )
-    except FileNotFoundError, subprocess.TimeoutExpired:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
         return {}
-    if proc.returncode != 0:
-        return {}
-    parsed = parse_terraform_output(proc.stdout)
+    parsed = parse_terraform_output(text)
     return {
         key: value for key, value in parsed.items() if key in CANONICAL_ENV and value
     }
@@ -107,7 +98,7 @@ def require_env(env: dict[str, str]) -> None:
         names = ", ".join(missing)
         raise TalosError(
             f"Azure environment is not configured (missing {names}). "
-            "Set the variables, run `terraform apply` in infra/, "
-            "or pass CLI flags.",
+            "Set the variables, run `gmake infra-create` (writes "
+            "`infra/outputs.json`), or pass CLI flags.",
             exit_code=2,
         )

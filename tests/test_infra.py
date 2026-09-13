@@ -284,6 +284,7 @@ def test_backend_bootstrap_uses_az_cli_not_terraform(repo_root: Path) -> None:
     gitignore = (repo_root / ".gitignore").read_text(encoding="utf-8")
     assert "*.tfstate" in gitignore
     assert "*.tfstate.*" in gitignore
+    assert "infra/outputs.json" in gitignore
 
 
 def test_tfstate_account_name_is_fixed_sttfst_prefix(repo_root: Path) -> None:
@@ -304,3 +305,17 @@ def test_makefile_migrate_state_and_backend_key(repo_root: Path) -> None:
     assert "key=$(ENV).tfstate" in makefile
     assert "sttfst" in makefile
     assert "rg-credit-policy-tfstate" in makefile
+
+
+def test_makefile_infra_create_emits_outputs_json(repo_root: Path) -> None:
+    makefile = (repo_root / "Makefile").read_text(encoding="utf-8")
+    create = _makefile_recipe(makefile, "infra-create")
+    destroy = _makefile_recipe(makefile, "infra-destroy")
+    assert "terraform -chdir=infra output -json > infra/outputs.json" in create
+    assert "rm -f infra/outputs.json" in destroy
+    assert "terraform output" not in destroy
+
+
+def test_gha_deploy_writes_outputs_json(repo_root: Path) -> None:
+    text = (repo_root / ".github/workflows/deploy.yml").read_text(encoding="utf-8")
+    assert "terraform -chdir=infra output -json > infra/outputs.json" in text

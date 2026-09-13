@@ -4,11 +4,12 @@
 
 ### Changed
 
+- **Env fill:** `gmake infra-create` writes `infra/outputs.json` (`terraform output -json` shape). Talos and pytest fill missing canonical env from that file unless `--no-terraform`. They never spawn `terraform output`. `gmake infra-destroy` drops the file. The file is gitignored.
 - **Infra backend:** `gmake infra-backend-create` / `infra-backend-show` / `infra-backend-destroy` use Azure CLI (`az group create`, `az storage account create`, `az storage container create`, `az group show` / `az storage account show`, `az group delete`). Drop `infra/backend/` Terraform. Account name is the fixed string `sttfstlab5` (never workload `stcp*`). Operator gets Storage Blob Data Contributor on the account.
 - **Make recipes:** Rename `gmake infra` to `gmake infra-create` and `gmake infra-backend` to `gmake infra-backend-create`. Add `gmake infra-show` (`terraform show`) and `gmake infra-backend-show` (`az show`).
 - **Infra:** Remote azurerm state (Azure AD) in `rg-credit-policy-tfstate`. Apply uses `infra/dev1.tfvars` or `infra/prd1.tfvars`. Environment names are `dev1` and `prd1` only (`credit-policy-demo` dropped). `gmake infra-create` defaults to `ENV=dev1`. GitHub release init uses backend key `prd1.tfstate`.
-- **Infra:** Swap `azd` + Bicep for Terraform CLI in `infra/`. Drop `azure.yaml`. `gmake infra-create` runs `terraform apply`. Canonical outputs fill missing env via `terraform -chdir=infra output -json` unless `--no-terraform`. State files are gitignored.
-- **Env load:** Talos and pytest no longer read repo-root `.env`. Missing keys come from process env, then Terraform output unless `--no-terraform`. `.env.example` is removed. `.gitignore` still lists `.env`.
+- **Infra:** Swap `azd` + Bicep for Terraform CLI in `infra/`. Drop `azure.yaml`. `gmake infra-create` runs `terraform apply`. State files are gitignored.
+- **Env load:** Talos and pytest no longer read repo-root `.env`. Missing keys come from process env, then `infra/outputs.json` unless `--no-terraform`. `.env.example` is removed. `.gitignore` still lists `.env`.
 - **CI:** Bump GitHub Actions to Node.js 24 runtimes (`actions/checkout@v7`, `astral-sh/setup-uv` v10.1.0, `azure/login@v3`) so runners stop forcing Node 20. Release deploy uses Terraform, not `azd`.
 
 ### Added

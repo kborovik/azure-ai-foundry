@@ -3,6 +3,7 @@
 .venv/
 *.tfstate
 *.tfstate.*
+infra/outputs.json
 .terraform/
 crash.log
 crash.*.log

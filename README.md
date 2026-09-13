@@ -68,7 +68,7 @@ terraform -chdir=infra apply -var-file=dev1.tfvars
 
 `terraform apply` deploys the resource group, Storage, Search, Foundry, model deployments, and RBAC. It does not create Foundry IQ objects. Environment names are `dev1` and `prd1` only.
 
-`uv run talos generate` and `uv run talos deploy` fill missing canonical names from `terraform -chdir=infra output -json` unless you pass `--no-terraform`. CLI flags override process environment variables. A stray `.env` is gitignored and is not loaded. Terraform state (`*.tfstate`) is gitignored and is never committed. First `terraform init -migrate-state` copies local state to the azurerm backend.
+`gmake infra-create` writes `infra/outputs.json` after apply. `uv run talos generate` and `uv run talos deploy` fill missing canonical names from that file unless you pass `--no-terraform`. They never spawn `terraform output`. CLI flags override process environment variables. A stray `.env` is gitignored and is not loaded. Terraform state (`*.tfstate`) and `infra/outputs.json` are gitignored and are never committed. First `terraform init -migrate-state` copies local state to the azurerm backend.
 
 ## Talos CLI
 
@@ -82,6 +82,6 @@ uv run talos deploy --help
 ## GitHub Actions
 
 - [`.github/workflows/test.yml`](.github/workflows/test.yml) — every push and pull request: `uv run talos test` (unit marker, CPython 3.14).
-- [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) — GitHub **release** `published` only (when `AZURE_CLIENT_ID` is set): OIDC login, `terraform -chdir=infra init` with backend key `prd1.tfstate`, `uv run talos deploy --wait`, then live pytest markers.
+- [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) — GitHub **release** `published` only (when `AZURE_CLIENT_ID` is set): OIDC login, `terraform -chdir=infra init` with backend key `prd1.tfstate`, write `infra/outputs.json`, `uv run talos deploy --wait`, then live pytest markers.
 
-Create a GitHub environment `credit-policy-live` and repository variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`. Federate a user-assigned identity to that environment. CI reads Terraform outputs when state is available; otherwise set the canonical Azure env vars on that environment. Do not put secrets in git.
+Create a GitHub environment `credit-policy-live` and repository variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`. Federate a user-assigned identity to that environment. CI writes `infra/outputs.json` from Terraform state when it is available; otherwise set the canonical Azure env vars on that environment. Do not put secrets in git.

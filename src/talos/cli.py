@@ -85,7 +85,7 @@ def cli() -> None:
 @click.option(
     "--no-terraform",
     is_flag=True,
-    help="Do not fill missing env vars from `terraform -chdir=infra output -json`.",
+    help="Do not fill missing env vars from `infra/outputs.json`.",
 )
 def generate(
     out: Path | None,
@@ -181,7 +181,7 @@ def generate(
 @click.option(
     "--no-terraform",
     is_flag=True,
-    help="Do not fill missing env vars from `terraform -chdir=infra output -json`.",
+    help="Do not fill missing env vars from `infra/outputs.json`.",
 )
 def deploy(
     search_endpoint: str | None,

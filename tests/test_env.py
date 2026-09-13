@@ -6,6 +6,7 @@ import pytest
 
 from talos.constants import CANONICAL_ENV, REQUIRED_ENV
 from talos.env import (
+    load_terraform_output,
     missing_required,
     parse_terraform_output,
     require_env,
@@ -53,6 +54,13 @@ def _plant_dotenv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, text: str) ->
     monkeypatch.chdir(tmp_path)
 
 
+def _plant_outputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, text: str) -> None:
+    (tmp_path / "infra").mkdir(exist_ok=True)
+    (tmp_path / "infra" / "outputs.json").write_text(text, encoding="utf-8")
+    monkeypatch.setattr("talos.env.repo_root", lambda: tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+
 def test_parse_terraform_output_unwraps_value() -> None:
     values = parse_terraform_output(TF_OUTPUT_JSON)
     assert values["AZURE_SEARCH_ENDPOINT"] == TF_SEARCH
@@ -75,7 +83,7 @@ def test_require_env_exit_code_2() -> None:
     assert exc.value.exit_code == 2
     assert "AZURE_SEARCH_ENDPOINT" in str(exc.value)
     assert ".env" not in str(exc.value)
-    assert "terraform apply" in str(exc.value)
+    assert "infra/outputs.json" in str(exc.value)
 
 
 def test_missing_required_reports_only_blank_names() -> None:
@@ -193,31 +201,35 @@ def test_resolve_generate_env_ignores_dotenv_then_calls_terraform(
     assert env["AZURE_STORAGE_ACCOUNT_URL"] == TF_STORAGE
 
 
-def test_load_terraform_output_keeps_canonical_names_only(
-    monkeypatch: pytest.MonkeyPatch,
+def test_load_terraform_output_reads_outputs_json_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(
-        "talos.env.parse_terraform_output",
-        lambda _text: {
-            "AZURE_SEARCH_ENDPOINT": TF_SEARCH,
-            "SEARCH_ENDPOINT": "https://banned.search.windows.net",
-            "FOUNDRY_PROJECT_ENDPOINT": "https://banned.services.ai.azure.com",
-        },
-    )
-    monkeypatch.setattr(
-        "talos.env.subprocess.run",
-        lambda *args, **kwargs: type(
-            "Proc", (), {"returncode": 0, "stdout": "{}", "stderr": ""}
-        )(),
-    )
-    from talos.env import load_terraform_output
-
+    _plant_outputs(tmp_path, monkeypatch, TF_OUTPUT_JSON)
     values = load_terraform_output()
     assert values["AZURE_SEARCH_ENDPOINT"] == TF_SEARCH
+    assert (
+        values["AZURE_AI_PROJECT_ENDPOINT"]
+        == "https://aif.example.services.ai.azure.com/api/projects/demo"
+    )
+    assert "BLANK" not in values
     assert "SEARCH_ENDPOINT" not in values
     assert "FOUNDRY_PROJECT_ENDPOINT" not in values
     for name in values:
         assert name in CANONICAL_ENV
+
+
+def test_load_terraform_output_missing_file_is_empty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("talos.env.repo_root", lambda: tmp_path)
+    assert load_terraform_output() == {}
+
+
+def test_env_module_does_not_spawn_terraform_output(repo_root: Path) -> None:
+    text = (repo_root / "src" / "talos" / "env.py").read_text(encoding="utf-8")
+    assert "subprocess" not in text
+    assert "terraform output" not in text
+    assert '["terraform"' not in text
 
 
 def test_gitignore_lists_dotenv_and_tfstate(repo_root: Path) -> None:
@@ -226,6 +238,7 @@ def test_gitignore_lists_dotenv_and_tfstate(repo_root: Path) -> None:
     assert ".env" in lines
     assert ".env.example" not in lines
     assert "*.tfstate" in lines
+    assert "infra/outputs.json" in lines
     assert ".terraform/" in lines
 
 

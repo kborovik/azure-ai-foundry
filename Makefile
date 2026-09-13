@@ -144,12 +144,13 @@ infra-init:
 		-backend-config="storage_account_name=$(TFSTATE_ACCOUNT)" \
 		-backend-config="key=$(ENV).tfstate"
 
-infra-create: infra-init ## terraform apply in infra/ (ENV=dev1|prd1, default dev1)
+infra-create: infra-init ## terraform apply in infra/; write infra/outputs.json (ENV=dev1|prd1)
 	$(call header,Checking az auth)
 	az account show --query name -o tsv
 	$(call header,Terraform apply $(ENV))
 	terraform -chdir=infra apply -input=false -auto-approve \
 		-var-file=$(ENV).tfvars
+	terraform -chdir=infra output -json > infra/outputs.json
 
 infra-show: ## Show workload terraform state (ENV=dev1|prd1)
 	terraform -chdir=infra show -no-color -var-file=$(ENV).tfvars | bat --language Terraform
@@ -160,10 +161,11 @@ infra:
 infra-backend:
 	$(error gmake infra-backend renamed — use gmake infra-backend-create)
 
-infra-destroy: infra-init ## terraform destroy workload stack (ENV=dev1|prd1)
+infra-destroy: infra-init ## terraform destroy workload stack; drop infra/outputs.json (ENV=dev1|prd1)
 	$(call header,Terraform destroy $(ENV))
 	terraform -chdir=infra destroy -input=false -auto-approve \
 		-var-file=$(ENV).tfvars
+	rm -f infra/outputs.json
 
 # `gmake e2e FILE=<path-or-stem>` scopes to one test file; unset = live markers.
 e2e_target := $(if $(FILE),$(firstword $(wildcard $(FILE) tests/$(FILE) tests/$(FILE).py)),)

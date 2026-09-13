@@ -86,7 +86,7 @@ T11|x|drop `.env` load from talos+pytest; flags>process>azd; drop `.env.example`
 T12|x|swap azd+Bicep → terraform CLI; drop azure.yaml; env fill `terraform -chdir=infra output -json`; flag `--no-terraform`|V11,V15,V23,I.infra,I.env,I.cmd
 T13|x|add azurerm backend + bootstrap; migrate-state; `infra/dev1.tfvars`+`prd1.tfvars`; drop credit-policy-demo; Makefile ENV∈{dev1,prd1}; GHA release prd1|V29,V30,I.infra,I.names
 T14|x|swap infra-backend-* terraform → az CLI; drop `infra/backend/`|V30,I.infra
-T15|.|Makefile infra-create emit `infra/outputs.json`; talos+pytest fill missing env from file; drop live `terraform output`; gitignore file; infra-destroy drop file|V15,I.infra,I.env,I.cmd
+T15|x|Makefile infra-create emit `infra/outputs.json`; talos+pytest fill missing env from file; drop live `terraform output`; gitignore file; infra-destroy drop file|V15,I.infra,I.env,I.cmd
 T16|.|swap deprecated `public_network_access_enabled` → `public_network_access` on storage (`"Enabled"`); search/foundry same iff provider exposes string attr|I.infra
 
 ## §B BUGS
