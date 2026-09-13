@@ -160,12 +160,6 @@ infra-create: infra-init ## terraform apply in infra/; write infra/outputs.json 
 infra-show: ## Show workload terraform state (ENV=dev1|prd1)
 	terraform -chdir=infra show -no-color -var-file=$(ENV).tfvars | bat --language Terraform
 
-infra:
-	$(error gmake infra renamed — use gmake infra-create)
-
-infra-backend:
-	$(error gmake infra-backend renamed — use gmake infra-backend-create)
-
 infra-destroy: infra-init ## terraform destroy workload stack; drop infra/outputs.json (ENV=dev1|prd1)
 	$(call header,Terraform destroy $(ENV))
 	terraform -chdir=infra destroy -input=false -auto-approve \
