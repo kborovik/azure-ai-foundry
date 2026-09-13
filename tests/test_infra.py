@@ -145,10 +145,18 @@ def test_canonical_outputs_only() -> None:
 
 def test_resource_names_match_spec() -> None:
     main = _read("main.tf")
+    assert re.search(r'resource_token\s*=\s*"lab5"', main)
+    assert "md5(" not in main
     assert "rg-credit-policy-${var.environment_name}" in main
     assert "stcp${local.resource_token}" in main
-    assert "srch-cp-${local.resource_token}" in main
-    assert "aif-cp-${local.resource_token}" in main
+    assert re.search(
+        r'search_name\s*=\s*"credit-policy-\$\{local\.resource_token\}"', main
+    )
+    assert re.search(
+        r'foundry_name\s*=\s*"credit-policy-\$\{local\.resource_token\}"', main
+    )
+    assert "srch-cp-" not in main
+    assert "aif-cp-" not in main
     assert "credit-policy-demo" in _read("variables.tf")
     storage = _read("storage.tf")
     assert DEFAULT_CONTAINER in storage
@@ -245,8 +253,35 @@ def test_makefile_env_and_var_file(repo_root: Path) -> None:
     assert re.search(r"^infra-backend-create:", makefile, re.M)
     assert re.search(r"^infra-backend-show:", makefile, re.M)
     assert re.search(r"^infra-backend-destroy:", makefile, re.M)
+    assert re.search(r"^ai-list:", makefile, re.M)
+    assert re.search(r"^ai-show:", makefile, re.M)
     assert "use gmake infra-create" in makefile
     assert "use gmake infra-backend-create" in makefile
+
+
+def test_makefile_ai_list_and_show(repo_root: Path) -> None:
+    makefile = (repo_root / "Makefile").read_text(encoding="utf-8")
+    listed = _makefile_recipe(makefile, "ai-list")
+    shown = _makefile_recipe(makefile, "ai-show")
+    for recipe in (listed, shown):
+        assert "need-az" in recipe
+        assert "need-az-auth" in recipe
+        assert "need-jq" in recipe
+        assert "need-terraform" not in recipe
+        assert "az cognitiveservices account show" in recipe
+        assert "az cognitiveservices account project show" in recipe
+        assert "az cognitiveservices account deployment list" in recipe
+    assert "-o table" in listed
+    assert "properties.provisioningState" in listed
+    assert "-o table" not in shown
+    assert "properties.provisioningState" not in shown
+    assert "infra/outputs.json" in makefile
+    assert "jq -r" in makefile
+    assert "python3" not in makefile
+    assert re.search(r"^ai-list:", makefile, re.M)
+    assert re.search(r"^ai-show:", makefile, re.M)
+    assert "ai-foundry-show" not in makefile
+    assert "ai-cognitiveservices" not in makefile
 
 
 def test_gha_release_uses_prd1_backend_key(repo_root: Path) -> None:
