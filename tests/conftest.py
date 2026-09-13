@@ -58,3 +58,28 @@ def golden_queries(repo_root: Path) -> list[dict[str, Any]]:
 def clean_azure_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in _AZURE_ENV_NAMES:
         monkeypatch.delenv(name, raising=False)
+
+
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    if item.get_closest_marker("teams") and os.environ.get("E2E_TEAMS") != "1":
+        pytest.skip("teams skip unless E2E_TEAMS=1")
+
+
+@pytest.fixture(scope="session")
+def live_env() -> dict[str, str]:
+    from talos.env import missing_required, resolve_env
+
+    env = resolve_env(use_terraform=True)
+    missing = missing_required(env)
+    if missing:
+        pytest.skip("live Azure env missing: " + ", ".join(missing))
+    return env
+
+
+@pytest.fixture(scope="session")
+def live_rest(live_env: dict[str, str]) -> Any:
+    from azure.identity import DefaultAzureCredential
+
+    from talos.rest import RequestsRest
+
+    return RequestsRest(DefaultAzureCredential())

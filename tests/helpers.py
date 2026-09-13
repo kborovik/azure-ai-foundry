@@ -14,6 +14,8 @@ GOLDEN_RELATIVE = "tests/fixtures/golden_queries.yaml"
 FACTS_RELATIVE = "corpus/facts.yaml"
 MANIFEST_RELATIVE = "data/credit-policies/manifest.json"
 POLICIES_RELATIVE = "data/credit-policies"
+APPLICATION_FIXTURES_RELATIVE = "tests/fixtures/client-applications"
+APPLICATION_OUTPUT_RELATIVE = "data/client-applications"
 
 BANNED_BANK_NAMES = (
     "JPMorgan",
@@ -33,8 +35,11 @@ __all__ = [
     "GOLDEN_RELATIVE",
     "MANIFEST_RELATIVE",
     "POLICIES_RELATIVE",
+    "APPLICATION_FIXTURES_RELATIVE",
+    "APPLICATION_OUTPUT_RELATIVE",
     "fact_value_cases",
     "first_visible_line",
+    "load_application_fixtures",
     "load_facts",
     "load_golden_queries",
     "load_manifest",
@@ -82,6 +87,19 @@ def load_golden_queries(root: Path | None = None) -> list[dict[str, Any]]:
 
 def policies_dir(root: Path | None = None) -> Path:
     return (root or repo_root()) / POLICIES_RELATIVE
+
+
+def load_application_fixtures(root: Path | None = None) -> list[dict[str, Any]]:
+    from talos.application import parse_application_markdown
+    from talos.constants import APPLICATION_TYPES
+
+    base = (root or repo_root()) / APPLICATION_FIXTURES_RELATIVE
+    records: list[dict[str, Any]] = []
+    for kind in APPLICATION_TYPES:
+        path = base / f"{kind}.md"
+        record = parse_application_markdown(path.read_text(encoding="utf-8"))
+        records.append(record)
+    return records
 
 
 def fact_value_cases(facts: dict[str, Any]) -> list[tuple[str, str, str, str]]:

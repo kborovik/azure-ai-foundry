@@ -30,6 +30,7 @@ TEMPLATES = repo_root() / "corpus/templates"
 def _generate_args(out: Path, *extra: str) -> list[str]:
     return [
         "generate",
+        "policy",
         "--local-only",
         "--out",
         str(out),
@@ -43,7 +44,7 @@ def _generate_args(out: Path, *extra: str) -> list[str]:
 
 
 def test_generate_help_documents_flags() -> None:
-    result = CliRunner().invoke(cli, ["generate", "--help"])
+    result = CliRunner().invoke(cli, ["generate", "policy", "--help"])
     assert result.exit_code == 0
     for flag in (
         "--out",
@@ -125,6 +126,7 @@ def test_duplicate_fact_key_exits_3(tmp_path: Path) -> None:
         cli,
         [
             "generate",
+            "policy",
             "--local-only",
             "--out",
             str(out),
@@ -147,6 +149,7 @@ def test_invalid_yaml_exits_3(tmp_path: Path) -> None:
         cli,
         [
             "generate",
+            "policy",
             "--local-only",
             "--out",
             str(tmp_path / "out"),
@@ -162,7 +165,7 @@ def test_invalid_yaml_exits_3(tmp_path: Path) -> None:
 
 def test_local_and_azure_only_are_mutex() -> None:
     result = CliRunner().invoke(
-        cli, ["generate", "--local-only", "--azure-only", "--no-terraform"]
+        cli, ["generate", "policy", "--local-only", "--azure-only", "--no-terraform"]
     )
     assert result.exit_code == 1, result.output
     assert "mutually exclusive" in result.output
@@ -170,14 +173,16 @@ def test_local_and_azure_only_are_mutex() -> None:
 
 def test_fail_if_missing_azure_exits_2(clean_azure_env: None) -> None:
     result = CliRunner().invoke(
-        cli, ["generate", "--fail-if-missing-azure", "--no-terraform"]
+        cli, ["generate", "policy", "--fail-if-missing-azure", "--no-terraform"]
     )
     assert result.exit_code == 2, result.output
     assert "Azure environment is not configured" in result.output
 
 
 def test_azure_only_missing_env_exits_2(clean_azure_env: None) -> None:
-    result = CliRunner().invoke(cli, ["generate", "--azure-only", "--no-terraform"])
+    result = CliRunner().invoke(
+        cli, ["generate", "policy", "--azure-only", "--no-terraform"]
+    )
     assert result.exit_code == 2, result.output
 
 
@@ -248,6 +253,13 @@ def test_blob_auth_falls_back_to_env_account_url() -> None:
     )
     assert auth.kind == "credential"
     assert auth.account_url == "https://env.blob.core.windows.net"
+
+
+def test_blob_auth_deploy_purpose_omits_local_only_hint() -> None:
+    with pytest.raises(TalosError, match="infra/outputs.json") as exc:
+        resolve_blob_auth({}, purpose="deploy")
+    assert exc.value.exit_code == 2
+    assert "--local-only" not in str(exc.value)
 
 
 def test_azure_blob_store_creates_private_container() -> None:
@@ -382,6 +394,7 @@ def test_cli_generate_uploads_when_azure_configured(
         cli,
         [
             "generate",
+            "policy",
             "--out",
             str(out),
             "--facts",

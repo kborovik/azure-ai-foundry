@@ -159,12 +159,24 @@ class AzureBlobStore:
         return str(blob.url)
 
 
-def resolve_blob_auth(env: dict[str, str], account_url: str = "") -> BlobAuth:
+def resolve_blob_auth(
+    env: dict[str, str],
+    account_url: str = "",
+    *,
+    purpose: str = "generate",
+) -> BlobAuth:
     connection_string = env.get("AZURE_STORAGE_CONNECTION_STRING") or ""
     if connection_string:
         return BlobAuth(kind="connection_string", connection_string=connection_string)
     url = account_url or env.get("AZURE_STORAGE_ACCOUNT_URL") or ""
     if not url:
+        if purpose == "deploy":
+            raise TalosError(
+                "Azure environment is not configured "
+                "(missing AZURE_STORAGE_ACCOUNT_URL or AZURE_STORAGE_CONNECTION_STRING). "
+                "Set the variables or run `gmake infra-create` (writes `infra/outputs.json`).",
+                exit_code=2,
+            )
         raise TalosError(
             "Azure environment is not configured "
             "(missing AZURE_STORAGE_ACCOUNT_URL or AZURE_STORAGE_CONNECTION_STRING). "
@@ -180,8 +192,9 @@ def open_blob_store(
     container: str,
     account_url: str = "",
     credential: TokenCredential | None = None,
+    purpose: str = "generate",
 ) -> BlobStore:
-    auth = resolve_blob_auth(env, account_url)
+    auth = resolve_blob_auth(env, account_url, purpose=purpose)
     if auth.kind == "connection_string":
         return AzureBlobStore.from_connection_string(auth.connection_string, container)
     from azure.identity import DefaultAzureCredential
@@ -197,6 +210,44 @@ def blob_metadata(item: RenderedDocument) -> dict[str, str]:
         "policy_version": item.document.version,
         "synthetic": "true",
     }
+
+
+def sync_markdown_directory(
+    store: BlobStore,
+    directory: Path,
+    *,
+    force: bool,
+    echo: Echo,
+    extra_metadata: dict[str, str] | None = None,
+) -> int:
+    """Upload `*.md` from directory. Skip when blob metadata content_sha256 matches."""
+    extra = extra_metadata or {}
+    uploaded = 0
+    try:
+        store.ensure_container()
+        if not directory.is_dir():
+            echo(f"blob-sync: local directory missing {directory}")
+            return 0
+        paths = sorted(directory.glob("*.md"))
+        if not paths:
+            echo(f"blob-sync: no markdown in {directory}")
+            return 0
+        for path in paths:
+            data = path.read_bytes()
+            digest = hashlib.sha256(data).hexdigest()
+            existing = None if force else store.existing_sha256(path.name)
+            if existing is not None and existing.lower() == digest:
+                echo(f"{path.name}  blob={store.blob_url(path.name)}  skipped")
+                continue
+            metadata = {"content_sha256": digest, "synthetic": "true", **extra}
+            url = store.upload_markdown(path.name, data, metadata)
+            echo(f"{path.name}  blob={url}  uploaded")
+            uploaded += 1
+    except TalosError:
+        raise
+    except Exception as exc:
+        raise TalosError(f"Blob upload failed: {exc}", exit_code=1) from exc
+    return uploaded
 
 
 def upload_blobs(

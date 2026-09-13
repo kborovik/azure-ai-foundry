@@ -49,11 +49,29 @@ def test_deploy_help_documents_plan_flags() -> None:
 
 
 def test_no_terraform_help_mentions_outputs_json() -> None:
-    for cmd in ("generate", "deploy"):
-        result = CliRunner().invoke(cli, [cmd, "--help"])
+    for cmd in (("generate", "policy"), ("generate", "application"), ("deploy",)):
+        result = CliRunner().invoke(cli, [*cmd, "--help"])
         assert result.exit_code == 0
         assert "infra/outputs.json" in result.output
         assert "terraform -chdir=infra output -json" not in result.output
+
+
+def test_bare_generate_prints_help_exit_2() -> None:
+    result = CliRunner().invoke(cli, ["generate"])
+    assert result.exit_code == 2
+    assert "policy" in result.output
+    assert "application" in result.output
+
+
+def test_generate_group_help_lists_policy_and_application() -> None:
+    result = CliRunner().invoke(cli, ["generate", "--help"])
+    assert result.exit_code == 0
+    assert "policy" in result.output
+    assert "application" in result.output
+    assert (
+        "Does not run deploy" in result.output
+        or "does not run deploy" in result.output.lower()
+    )
 
 
 def test_deploy_missing_env_exits_2(clean_azure_env: None) -> None:
@@ -90,6 +108,7 @@ def test_deploy_dry_run_prints_plan(clean_azure_env: None) -> None:
     assert connection_lines[0].rstrip().endswith(STORAGE_ID)
     assert not connection_lines[0].rstrip().endswith(";")
     assert "ks-credit-policies" in result.output
+    assert "ks-client-applications" in result.output
     assert "credit-policy-agent" in result.output
 
 

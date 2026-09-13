@@ -1,4 +1,6 @@
 .env
+data/client-applications/*.md
+data/client-applications/manifest.json
 .azure/
 .venv/
 *.tfstate

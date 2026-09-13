@@ -4,6 +4,7 @@
 
 ### Changed
 
+- **Generate group:** `uv run talos generate` is a Click group (`policy`, `application`). Bare `talos generate` prints help and exits 2. `talos generate policy` is the existing policy render and does not run deploy.
 - **Standing terraform init:** `gmake infra-init` and README use `-reconfigure`, not `-migrate-state`. Remote azurerm state is already live. Reconstruct after clone with backend-config `key=<env>.tfstate`.
 - **Storage network:** `azurerm_storage_account` uses `public_network_access = "Enabled"` (string). Deprecated `public_network_access_enabled` is dropped on storage. Search and Foundry keep the bool attribute. AzureRM provider floor is `>= 5.5.0`.
 - **Env fill:** `gmake infra-create` writes `infra/outputs.json` (`terraform output -json` shape). Talos and pytest fill missing canonical env from that file unless `--no-terraform`. They never spawn `terraform output`. `gmake infra-destroy` drops the file. The file is gitignored.
@@ -16,6 +17,11 @@
 
 ### Added
 
+- **EvaluationMode:** `agents/credit-policy-agent.instructions.md` evaluates by `application_id` or `customer_name`, asks if both are missing, and cites policy documents only.
+- **Teams Just-you:** runbook in `docs/teams.md` (BotServiceRbac, sideload fallback, evaluate-by-id and evaluate-by-name). Marker `teams` skips unless `E2E_TEAMS=1`; flag set with no Activity client skips, not fails.
+- **Live pytest:** markers `ingestion`, `retrieval`, and `agent` skip without canonical Azure env. Evaluate-by-id, evaluate-by-name, ask-when-missing, and one case per ApplicationType. Unit fixtures in `tests/fixtures/client-applications/`.
+- **`talos deploy` two sources:** blob-sync both local corpora (hash-skip), PUT `ks-credit-policies` and `ks-client-applications`, run both indexers, `--wait` until policy ≥12 and application ≥3, PUT `kb-credit-policies` with both sources, ARM MCP connection, agent version pin. Omit stored `temperature` for `gpt-5*` (invoke 400s otherwise); set `temperature=0` on other models. `gmake deploy` and release CI generate the three application slots before `--wait`. Blob container `client-applications` is in Terraform.
+- **`talos generate application`:** Foundry `gpt-5-mini` emits a unique SyntheticBorrower (`--type` or `--all`; `--force` overwrites a slot). Validate+one retry. Gitignore `data/client-applications/*.md` and `manifest.json`. Optional blob hash-skip. Does not PUT knowledge sources.
 - **`gmake infra-plan`:** `terraform plan` in `infra/` with `-var-file=<env>.tfvars` after `infra-init` (`ENV=dev1|prd1`). Does not write `infra/outputs.json`.
 - **`gmake infra-backend-create` / `infra-backend-show` / `infra-backend-destroy` / `infra-destroy`:** bootstrap the tfstate account via Azure CLI (fixed name `sttfstlab5`, never workload `stcp*`); show or destroy the workload stack or the backend resource group. Standing workload `terraform init` uses `-reconfigure`.
 - **`gmake infra-create` / `infra-show`:** check `az` auth, `terraform -chdir=infra init`, then `terraform apply` or `terraform show` with `location=swedencentral`.

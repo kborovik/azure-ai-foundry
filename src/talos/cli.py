@@ -6,7 +6,11 @@ import click
 
 from talos import __version__
 from talos.constants import (
+    APPLICATION_TYPES,
     DEFAULT_AGENT_NAME,
+    DEFAULT_APPLICATION_CONTAINER,
+    DEFAULT_APPLICATION_KNOWLEDGE_SOURCE,
+    DEFAULT_APPLICATION_OUTPUT_RELATIVE,
     DEFAULT_CHAT_DEPLOYMENT,
     DEFAULT_CONNECTION_NAME,
     DEFAULT_CONTAINER,
@@ -30,7 +34,16 @@ def cli() -> None:
     """Generate, deploy, and test the credit-policy agent on Microsoft Foundry."""
 
 
-@cli.command()
+@cli.group(invoke_without_command=True)
+@click.pass_context
+def generate(ctx: click.Context) -> None:
+    """Render synthetic credit policies or client applications. Does not run deploy."""
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+        raise SystemExit(2)
+
+
+@generate.command("policy")
 @click.option(
     "--out",
     type=click.Path(path_type=Path, file_okay=False),
@@ -87,7 +100,7 @@ def cli() -> None:
     is_flag=True,
     help="Do not fill missing env vars from `infra/outputs.json`.",
 )
-def generate(
+def generate_policy(
     out: Path | None,
     facts_path: Path | None,
     templates_dir: Path | None,
@@ -100,7 +113,7 @@ def generate(
     fail_if_missing_azure: bool,
     no_terraform: bool,
 ) -> None:
-    """Render synthetic credit-policy Markdown. Does not run the Search indexer."""
+    """Render synthetic credit-policy Markdown. Does not run the Search indexer or deploy."""
     try:
         root = repo_root()
         config = GenerateConfig(
@@ -117,6 +130,102 @@ def generate(
             use_terraform=not no_terraform,
         )
         run_generate(config, echo=click.echo)
+    except TalosError as exc:
+        click.echo(str(exc), err=True)
+        raise SystemExit(exc.exit_code) from exc
+
+
+@generate.command("application")
+@click.option(
+    "--type",
+    "application_type",
+    type=click.Choice(APPLICATION_TYPES, case_sensitive=True),
+    default=None,
+    help="Generate one ApplicationType slot.",
+)
+@click.option(
+    "--all",
+    "all_types",
+    is_flag=True,
+    help="Generate all three ApplicationType slots with unique identities.",
+)
+@click.option(
+    "--out",
+    type=click.Path(path_type=Path, file_okay=False),
+    default=None,
+    help=f"Output directory. Default {DEFAULT_APPLICATION_OUTPUT_RELATIVE}.",
+)
+@click.option(
+    "--facts",
+    "facts_path",
+    type=click.Path(path_type=Path, dir_okay=False),
+    default=None,
+    help=f"Facts YAML. Default {DEFAULT_FACTS_RELATIVE}.",
+)
+@click.option(
+    "--container",
+    default=DEFAULT_APPLICATION_CONTAINER,
+    show_default=True,
+)
+@click.option(
+    "--account-url",
+    default=None,
+    help="Storage account URL. Default $AZURE_STORAGE_ACCOUNT_URL.",
+)
+@click.option(
+    "--local-only",
+    is_flag=True,
+    help="Write local files only; do not upload blobs.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Print the plan without calling the LLM or writing files.",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Overwrite an existing type slot.",
+)
+@click.option(
+    "--no-terraform",
+    is_flag=True,
+    help="Do not fill missing env vars from `infra/outputs.json`.",
+)
+def generate_application_cmd(
+    application_type: str | None,
+    all_types: bool,
+    out: Path | None,
+    facts_path: Path | None,
+    container: str,
+    account_url: str | None,
+    local_only: bool,
+    dry_run: bool,
+    force: bool,
+    no_terraform: bool,
+) -> None:
+    """Generate unique synthetic client applications via Foundry gpt-5-mini. Does not PUT knowledge sources."""
+    from talos.application import ApplicationGenerateConfig, run_generate_application
+
+    try:
+        if bool(application_type) == bool(all_types):
+            raise TalosError("exactly one of --type or --all is required", exit_code=1)
+        root = repo_root()
+        env = resolve_env(use_terraform=not no_terraform)
+        types = APPLICATION_TYPES if all_types else (application_type or "",)
+        config = ApplicationGenerateConfig(
+            out=out or (root / DEFAULT_APPLICATION_OUTPUT_RELATIVE),
+            facts_path=facts_path or (root / DEFAULT_FACTS_RELATIVE),
+            types=types,
+            force=force,
+            local_only=local_only,
+            dry_run=dry_run,
+            use_terraform=not no_terraform,
+            account_url=account_url or "",
+            container=container,
+            project_endpoint=env.get("AZURE_AI_PROJECT_ENDPOINT") or "",
+        )
+        run_generate_application(config, echo=click.echo)
     except TalosError as exc:
         click.echo(str(exc), err=True)
         raise SystemExit(exc.exit_code) from exc
@@ -220,14 +329,22 @@ def deploy(
             ai_services_endpoint=_first(
                 ai_services_endpoint, env.get("AZURE_AI_SERVICES_ENDPOINT")
             ),
+            storage_account_url=_first(env.get("AZURE_STORAGE_ACCOUNT_URL")),
+            storage_connection_string=_first(
+                env.get("AZURE_STORAGE_CONNECTION_STRING")
+            ),
             container=container,
+            application_container=DEFAULT_APPLICATION_CONTAINER,
             knowledge_source=knowledge_source,
+            application_knowledge_source=DEFAULT_APPLICATION_KNOWLEDGE_SOURCE,
             knowledge_base=knowledge_base,
             agent_name=agent_name,
             connection_name=connection_name,
             chat_deployment=chat_deployment,
             embedding_deployment=embedding_deployment,
             instructions_path=instructions_path,
+            policy_dir=repo_root() / DEFAULT_OUTPUT_RELATIVE,
+            application_dir=repo_root() / DEFAULT_APPLICATION_OUTPUT_RELATIVE,
             wait=wait,
             skip_indexer_run=skip_indexer_run,
             skip_endpoint_patch=skip_endpoint_patch,
@@ -242,6 +359,15 @@ def deploy(
                 "AZURE_AI_SERVICES_ENDPOINT": config.ai_services_endpoint,
             }
         )
+        if not dry_run and not (
+            config.storage_account_url or config.storage_connection_string
+        ):
+            raise TalosError(
+                "Azure environment is not configured "
+                "(missing AZURE_STORAGE_ACCOUNT_URL or AZURE_STORAGE_CONNECTION_STRING). "
+                "Set the variables or run `gmake infra-create` (writes `infra/outputs.json`).",
+                exit_code=2,
+            )
         run_deploy(config, echo=click.echo)
     except TalosError as exc:
         click.echo(str(exc), err=True)

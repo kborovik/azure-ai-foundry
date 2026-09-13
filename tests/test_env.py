@@ -121,17 +121,18 @@ def test_resolve_env_no_terraform_does_not_load(
     assert env.get("AZURE_SEARCH_ENDPOINT") != TF_SEARCH
 
 
-def test_resolve_env_skips_terraform_when_required_present(
+def test_resolve_env_fills_canonical_when_required_present(
+    clean_azure_env: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     for name in REQUIRED_ENV:
         monkeypatch.setenv(name, f"https://{name}.example")
-    called: list[bool] = []
     monkeypatch.setattr(
-        "talos.env.load_terraform_output", lambda: called.append(True) or {}
+        "talos.env.load_terraform_output",
+        lambda: {"AZURE_STORAGE_ACCOUNT_URL": "https://st.blob.core.windows.net"},
     )
-    resolve_env(use_terraform=True)
-    assert called == []
+    env = resolve_env(use_terraform=True)
+    assert env["AZURE_STORAGE_ACCOUNT_URL"] == "https://st.blob.core.windows.net"
 
 
 def test_resolve_env_does_not_load_dotenv_file(
@@ -240,6 +241,8 @@ def test_gitignore_lists_dotenv_and_tfstate(repo_root: Path) -> None:
     assert "*.tfstate" in lines
     assert "infra/outputs.json" in lines
     assert ".terraform/" in lines
+    assert "data/client-applications/*.md" in lines
+    assert "data/client-applications/manifest.json" in lines
 
 
 def test_env_example_is_not_committed(repo_root: Path) -> None:
