@@ -29,6 +29,7 @@ dry-run = $(findstring n,$(firstword $(MAKEFLAGS)))
 need-terraform = $(if $(dry-run),,$(if $(shell command -v terraform),,$(error terraform not on PATH — https://developer.hashicorp.com/terraform/install)))
 need-az = $(if $(dry-run),,$(if $(shell command -v az),,$(error az CLI required — https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)))
 need-az-auth = $(if $(dry-run),,$(shell az account show >/dev/null 2>&1)$(if $(filter 0,$(.SHELLSTATUS)),,$(error az not authenticated — run: az login)))
+need-jq = $(if $(dry-run),,$(if $(shell command -v jq),,$(error jq required — https://jqlang.github.io/jq/download/)))
 need-gh = $(if $(dry-run),,$(if $(shell command -v gh),,$(error gh CLI required — https://cli.github.com/)))
 need-gh-auth = $(if $(dry-run),,$(shell gh auth status >/dev/null 2>&1)$(if $(filter 0,$(.SHELLSTATUS)),,$(error gh not authenticated — run: gh auth login)))
 need-clean = $(if $(dry-run),,$(if $(shell git status --porcelain),$(error working tree not clean — commit or stash first)))
@@ -56,6 +57,7 @@ default: help
 .PHONY: help test check generate deploy infra infra-backend
 .PHONY: infra-create infra-plan infra-fmt infra-validate infra-show infra-destroy infra infra-init
 .PHONY: infra-backend-create infra-backend-show infra-backend-destroy infra-backend
+.PHONY: ai-list ai-show
 .PHONY: e2e clean preflight release major minor patch
 .PHONY: _release-pre _release-bump _release-tag _release-gh
 
@@ -175,6 +177,40 @@ infra-create: infra-validate ## terraform apply in infra/; write infra/outputs.j
 infra-show: ## Show workload terraform state (ENV=dev1|prd1)
 	terraform -chdir=infra show -no-color -var-file=$(ENV).tfvars | bat --language Terraform
 
+# Print "RG ACCOUNT PROJECT" from infra/outputs.json (terraform output -json shape).
+ai-ids = jq -r '[.AZURE_RESOURCE_GROUP.value, (.AZURE_AI_PROJECT_RESOURCE_ID.value | split("/") | .[index("accounts") + 1]), (.AZURE_AI_PROJECT_RESOURCE_ID.value | split("/") | .[index("projects") + 1])] | join(" ")' infra/outputs.json
+
+ai-list: ## List Foundry account, project, and deployments
+	$(call need-az)
+	$(call need-az-auth)
+	$(call need-jq)
+	$(call header,Listing Foundry)
+	test -f infra/outputs.json || { echo "missing infra/outputs.json — run: gmake infra-create" >&2; exit 1; }
+	$(ai-ids) | { \
+		read rg account project; \
+		[ -n "$$account" ] || exit 1; \
+		az cognitiveservices account show --name $$account --resource-group $$rg \
+			--query "{name:name,kind:kind,sku:sku.name,state:properties.provisioningState,endpoint:properties.endpoint}" -o table; \
+		az cognitiveservices account project show --name $$account --resource-group $$rg --project-name $$project \
+			--query "{name:name,state:properties.provisioningState}" -o table; \
+		az cognitiveservices account deployment list --name $$account --resource-group $$rg \
+			--query "[].{name:name,model:properties.model.name,version:properties.model.version,state:properties.provisioningState}" -o table; \
+	}
+
+ai-show: ## Show Foundry account, project, and deployments in detail
+	$(call need-az)
+	$(call need-az-auth)
+	$(call need-jq)
+	$(call header,Showing Foundry)
+	test -f infra/outputs.json || { echo "missing infra/outputs.json — run: gmake infra-create" >&2; exit 1; }
+	$(ai-ids) | { \
+		read rg account project; \
+		[ -n "$$account" ] || exit 1; \
+		az cognitiveservices account show --name $$account --resource-group $$rg; \
+		az cognitiveservices account project show --name $$account --resource-group $$rg --project-name $$project; \
+		az cognitiveservices account deployment list --name $$account --resource-group $$rg; \
+	}
+
 infra:
 	$(error use gmake infra-create)
 
@@ -281,6 +317,8 @@ pad-infra-fmt := infra-fmt$(space)
 pad-preflight := preflight$(space)
 pad-release := release$(space)$(space)$(space)
 pad-e2e := e2e$(space)$(space)$(space)$(space)$(space)$(space)$(space)
+pad-ai-list := ai-list$(space)$(space)$(space)
+pad-ai-show := ai-show$(space)$(space)$(space)
 pad10 = $(or $(pad-$1),$1)
 show-help = $(let tgt desc,$(subst $(s)##$(s), ,$1),$(let name text,$(patsubst %:,%,$(firstword $(subst $(s),$(space),$(tgt)))) $(strip $(subst $(s),$(space),$(desc))),$(info   $(yellow)$(call pad10,$(name))$(reset) $(text))))
 
