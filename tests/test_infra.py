@@ -273,33 +273,56 @@ def test_makefile_env_and_var_file(repo_root: Path) -> None:
     assert re.search(r"^infra-backend-create:", makefile, re.M)
     assert re.search(r"^infra-backend-show:", makefile, re.M)
     assert re.search(r"^infra-backend-destroy:", makefile, re.M)
-    assert re.search(r"^ai-list:", makefile, re.M)
-    assert re.search(r"^ai-show:", makefile, re.M)
+    assert re.search(r"^ai-account:", makefile, re.M)
+    assert re.search(r"^ai-project:", makefile, re.M)
+    assert re.search(r"^ai-agent:", makefile, re.M)
+    assert re.search(r"^ai-search:", makefile, re.M)
+    assert re.search(r"^ai-storage:", makefile, re.M)
     assert "use gmake infra-create" in makefile
     assert "use gmake infra-backend-create" in makefile
 
 
-def test_makefile_ai_list_and_show(repo_root: Path) -> None:
+def test_makefile_ai_inspect_recipes(repo_root: Path) -> None:
     makefile = (repo_root / "Makefile").read_text(encoding="utf-8")
-    listed = _makefile_recipe(makefile, "ai-list")
-    shown = _makefile_recipe(makefile, "ai-show")
-    for recipe in (listed, shown):
-        assert "need-az" in recipe
-        assert "need-az-auth" in recipe
-        assert "need-jq" in recipe
+    needles = {
+        "ai-account": (
+            "az cognitiveservices account show",
+            "az cognitiveservices account deployment list",
+            "properties.provisioningState",
+        ),
+        "ai-project": ("az cognitiveservices account project show",),
+        "ai-agent": (
+            "az rest",
+            "credit-policy-agent",
+            "api-version=v1",
+            "--resource https://ai.azure.com",
+        ),
+        "ai-search": ("az search service show",),
+        "ai-storage": (
+            "az storage account show",
+            "az storage container list",
+            "--auth-mode login",
+        ),
+    }
+    start = makefile.index("define ai-pre")
+    pre = makefile[start : makefile.index("endef", start)]
+    assert "need-az" in pre
+    assert "need-az-auth" in pre
+    assert "need-jq" in pre
+    assert "need-terraform" not in pre
+    for name, required in needles.items():
+        assert re.search(rf"^{name}:", makefile, re.M)
+        recipe = _makefile_recipe(makefile, name)
+        assert "$(call ai-pre," in recipe
         assert "need-terraform" not in recipe
-        assert "az cognitiveservices account show" in recipe
-        assert "az cognitiveservices account project show" in recipe
-        assert "az cognitiveservices account deployment list" in recipe
-    assert "-o table" in listed
-    assert "properties.provisioningState" in listed
-    assert "-o table" not in shown
-    assert "properties.provisioningState" not in shown
+        assert "-o table" in recipe
+        for needle in required:
+            assert needle in recipe, (name, needle)
     assert "infra/outputs.json" in makefile
     assert "jq -r" in makefile
     assert "python3" not in makefile
-    assert re.search(r"^ai-list:", makefile, re.M)
-    assert re.search(r"^ai-show:", makefile, re.M)
+    assert not re.search(r"^ai-list:", makefile, re.M)
+    assert not re.search(r"^ai-show:", makefile, re.M)
     assert "ai-foundry-show" not in makefile
     assert "ai-cognitiveservices" not in makefile
 
