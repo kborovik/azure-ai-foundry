@@ -37,9 +37,10 @@ Terraform CLI in `infra/` provisions Storage, Azure AI Search (Basic), and a Mic
 Remote state lives in resource group `rg-credit-policy-tfstate` (not the workload `stcp*` storage account). Bootstrap once, then apply `dev1` or `prd1`:
 
 ```bash
-gmake infra-backend          # once: tfstate RG + storage
-gmake infra                  # ENV=dev1 by default
-gmake infra ENV=prd1
+gmake infra-backend-create   # once: tfstate RG + storage
+gmake infra-create           # ENV=dev1 by default
+gmake infra-create ENV=prd1
+gmake infra-show             # terraform show for ENV
 gmake infra-destroy ENV=dev1
 gmake infra-backend-destroy  # drops the tfstate account
 ```

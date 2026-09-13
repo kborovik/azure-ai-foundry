@@ -236,9 +236,14 @@ def test_makefile_env_and_var_file(repo_root: Path) -> None:
     assert "ALLOWED_ENVS := dev1 prd1" in makefile
     assert "-var-file=$(ENV).tfvars" in makefile
     assert "need-env" in makefile
-    assert "infra-backend" in makefile
-    assert "infra-backend-destroy" in makefile
-    assert "infra-destroy" in makefile
+    assert re.search(r"^infra-create:", makefile, re.M)
+    assert re.search(r"^infra-show:", makefile, re.M)
+    assert re.search(r"^infra-destroy:", makefile, re.M)
+    assert re.search(r"^infra-backend-create:", makefile, re.M)
+    assert re.search(r"^infra-backend-show:", makefile, re.M)
+    assert re.search(r"^infra-backend-destroy:", makefile, re.M)
+    assert "use gmake infra-create" in makefile
+    assert "use gmake infra-backend-create" in makefile
 
 
 def test_gha_release_uses_prd1_backend_key(repo_root: Path) -> None:

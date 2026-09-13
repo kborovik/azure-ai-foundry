@@ -51,7 +51,9 @@ rwildcard = $(strip \
 
 default: help
 
-.PHONY: help check generate deploy infra infra-backend infra-backend-destroy infra-destroy
+.PHONY: help check generate deploy
+.PHONY: infra-create infra-show infra-destroy infra
+.PHONY: infra-backend-create infra-backend-show infra-backend-destroy infra-backend
 .PHONY: e2e clean preflight release major minor patch
 .PHONY: _release-pre _release-bump _release-tag _release-gh
 
@@ -82,7 +84,7 @@ preflight: .venv ## Read-only az / terraform session check
 	az account show --query name -o tsv
 	terraform version
 
-infra-backend: ## Create remote-state RG + storage (once)
+infra-backend-create: ## Create remote-state RG + storage (once)
 	$(call need-az)
 	$(call need-terraform)
 	$(call need-az-auth)
@@ -92,6 +94,14 @@ infra-backend: ## Create remote-state RG + storage (once)
 	terraform -chdir=infra/backend init -input=false
 	terraform -chdir=infra/backend apply -input=false -auto-approve \
 		-var='location=$(AZURE_LOCATION)'
+
+infra-backend-show: ## Show remote-state terraform state
+	$(call need-az)
+	$(call need-terraform)
+	$(call need-az-auth)
+	$(call header,Terraform show tfstate backend)
+	terraform -chdir=infra/backend init -input=false
+	terraform -chdir=infra/backend show
 
 infra-backend-destroy: ## Destroy remote-state RG + storage
 	$(call need-az)
@@ -105,7 +115,7 @@ infra-backend-destroy: ## Destroy remote-state RG + storage
 # Local terraform.tfstate → azurerm: -migrate-state. Later inits / ENV switch: -reconfigure (do not copy state between keys).
 define init-remote
 	account=$$(az storage account list -g $(TFSTATE_RG) --query "[?starts_with(name, 'sttfst')].name | [0]" -o tsv); \
-	test -n "$$account" || { echo "backend storage missing — run: gmake infra-backend" >&2; exit 1; }; \
+	test -n "$$account" || { echo "backend storage missing — run: gmake infra-backend-create" >&2; exit 1; }; \
 	if [ -f infra/terraform.tfstate ]; then \
 	  terraform -chdir=infra init -input=false -migrate-state -force-copy \
 	    -backend-config="storage_account_name=$$account" \
@@ -117,7 +127,7 @@ define init-remote
 	fi
 endef
 
-infra: ## terraform apply in infra/ (ENV=dev1|prd1, default dev1)
+infra-create: ## terraform apply in infra/ (ENV=dev1|prd1, default dev1)
 	$(call need-env)
 	$(call need-az)
 	$(call need-terraform)
@@ -129,6 +139,21 @@ infra: ## terraform apply in infra/ (ENV=dev1|prd1, default dev1)
 	terraform -chdir=infra apply -input=false -auto-approve \
 		-var-file=$(ENV).tfvars \
 		-var='location=$(AZURE_LOCATION)'
+
+infra-show: ## Show workload terraform state (ENV=dev1|prd1)
+	$(call need-env)
+	$(call need-az)
+	$(call need-terraform)
+	$(call need-az-auth)
+	$(call header,Terraform show $(ENV))
+	$(init-remote)
+	terraform -chdir=infra show
+
+infra:
+	$(error gmake infra renamed — use gmake infra-create)
+
+infra-backend:
+	$(error gmake infra-backend renamed — use gmake infra-backend-create)
 
 infra-destroy: ## terraform destroy workload stack (ENV=dev1|prd1)
 	$(call need-env)
@@ -226,7 +251,6 @@ uv.lock: pyproject.toml
 # Target-line double-hash descriptions, read with $(file) and split with $(let).
 help-src := $(file < $(firstword $(MAKEFILE_LIST)))
 help-words := $(foreach w,$(subst $(space),$(s),$(help-src)),$(if $(and $(findstring $(s)##$(s),$(w)),$(filter-out \#%,$(w))),$(w)))
-pad-infra := infra$(space)$(space)$(space)$(space)$(space)
 pad-check := check$(space)$(space)$(space)$(space)$(space)
 pad-clean := clean$(space)$(space)$(space)$(space)$(space)
 pad-deploy := deploy$(space)$(space)$(space)$(space)
