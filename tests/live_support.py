@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import pytest
@@ -165,5 +166,19 @@ def flatten_retrieve_text(body: dict[str, Any]) -> str:
     return str(body)
 
 
+_CITATION_GLYPH = re.compile(r"【[^】]*†([^】]+)】")
+
+
 def citation_glyph_present(text: str) -> bool:
     return "【" in text and "†" in text and "】" in text
+
+
+def citation_sources(text: str) -> list[str]:
+    return _CITATION_GLYPH.findall(text)
+
+
+def assert_policy_only_citations(text: str) -> None:
+    for source in citation_sources(text):
+        assert "credit-application-" not in source, source
+        if source.endswith(".md"):
+            assert source.startswith("CP-"), source

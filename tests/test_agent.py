@@ -3,7 +3,12 @@ from __future__ import annotations
 import pytest
 
 from talos.constants import APPLICATION_TYPES, REFUSAL_SENTENCE
-from tests.live_support import application_cases, citation_glyph_present, invoke_agent
+from tests.live_support import (
+    application_cases,
+    assert_policy_only_citations,
+    citation_glyph_present,
+    invoke_agent,
+)
 
 pytestmark = pytest.mark.agent
 
@@ -24,7 +29,7 @@ def test_evaluate_by_application_id(live_env: dict[str, str]) -> None:
     lower = text.lower()
     assert application_id in text or "accept" in lower
     assert citation_glyph_present(text)
-    assert ".md" not in text.split("†")[-1] or "CP-" in text
+    assert_policy_only_citations(text)
 
 
 def test_evaluate_by_customer_name(live_env: dict[str, str]) -> None:
@@ -43,8 +48,7 @@ def test_evaluate_by_customer_name(live_env: dict[str, str]) -> None:
     lower = text.lower()
     assert name.split()[0] in text or "reject" in lower
     assert citation_glyph_present(text)
-    assert "accepted.md" not in text and "rejected.md" not in text
-    assert "credit-application-" not in text or "CP-" in text
+    assert_policy_only_citations(text)
 
 
 def test_ask_when_missing_identifier(live_env: dict[str, str]) -> None:
@@ -86,6 +90,7 @@ def test_one_case_per_application_type(
     )
     assert token in lower
     assert citation_glyph_present(text)
+    assert_policy_only_citations(text)
 
 
 def test_policy_only_out_of_corpus_refuses(live_env: dict[str, str]) -> None:
