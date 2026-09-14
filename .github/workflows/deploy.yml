@@ -43,7 +43,7 @@ jobs:
       - name: Write terraform outputs
         run: terraform -chdir=infra output -json > infra/outputs.json
       - name: Generate client applications
-        run: uv run talos generate application --all --force --local-only
+        run: uv run talos generate application --all --local-only
       - name: Deploy Foundry IQ and agent
         run: uv run talos deploy --wait
       - name: Run live tests

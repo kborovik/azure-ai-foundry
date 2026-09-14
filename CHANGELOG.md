@@ -5,6 +5,7 @@
 ### Fixed
 
 - **`talos publish`:** POST `/microsoft365/publish` now sends `developerWebsiteUrl`, `privacyUrl`, and `termsOfUseUrl` (HTTPS). Foundry 400s without them (`DeveloperWebsiteUrl must be a valid HTTPS URL`). Defaults match the Microsoft sample; override with `--developer-website-url`, `--privacy-url`, `--terms-of-use-url`. Invalid URLs fail locally before the request.
+- **Release CI:** `talos generate application --all --local-only` (drop `--force`). `--force` now requires `--application-id` and cannot combine with `--all`; the old flag would fail the release deploy before `--wait`.
 
 ### Changed
 
