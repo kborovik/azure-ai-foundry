@@ -1,26 +1,3 @@
-SYNTHETIC — DEMO ONLY
-
----
-application_id: CA-2026-000303
-customer_name: Nia Pell
-customer_id: SYN-318704
-email: nia.pell@example.invalid
-phone: +1-555-0160
-address: 4 Harbor Lane, Contoso Bay, CD 00033
-age_band: 30-39
-employer: Pell Studio
-annual_income: USD 140,000
-product: SME working-capital facility
-facility:
-  loan_amount: USD 400,000
-  years_in_operation: 5 years
-  tenor_months: "12"
-attached_documents:
-  - last 2 pay stubs
-  - W-2
-narrative: I, Nia Pell of Pell Studio, apply for an SME working-capital facility of USD 400,000. The business has been in operation for 5 years and I request a 12 month tenor.
----
-
 # Credit application CA-2026-000303
 
 I am filing this synthetic credit application with Contoso Demo Bank. This is not a real borrower record.

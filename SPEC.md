@@ -99,7 +99,7 @@ T21|x|drop `talos test` Click; Makefile `test` → `uv run pytest`; `check` call
 T22|x|swap terraform `local.resource_token` md5(subscription-env-location) → literal `lab5`; `gmake infra-destroy` then `gmake infra-create`|I.names,I.infra,V11
 T23|x|drop terraform variables not in tfvars (`principal_id`, `chat_capacity`, `embedding_capacity`, `project_name`, `chat_deployment_name`, `embedding_deployment_name`) → locals/literals|V29,I.infra
 T24|x|swap application generate+fixtures+instructions → opaque `CA-YYYY-NNNNNN`, customer filing + attached-docs list, file `credit-application-{application_id}.md`, mixed products, intended_outcome in manifest only, EvaluationMode compare docs + emit judgement, ! infer outcome from id or filename|V1,V2,V5,V27,V31,V32,I.cmd,I.file,I.agent
-T25|.|swap application generate+fixtures: MD opens `# Credit application {application_id}`; drop watermark line + YAML prefix|V2,V32,I.file
+T25|x|swap application generate+fixtures: MD opens `# Credit application {application_id}`; drop watermark line + YAML prefix|V2,V32,I.file
 
 ## §B BUGS
 

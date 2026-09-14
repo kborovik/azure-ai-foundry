@@ -1,29 +1,3 @@
-SYNTHETIC — DEMO ONLY
-
----
-application_id: CA-2026-000202
-customer_name: Bram Cotter
-customer_id: SYN-209331
-email: bram.cotter@example.invalid
-phone: +1-555-0188
-address: 9 Quarry Road, Contoso Mills, CD 00022
-age_band: 45-54
-employer: Fabrikam Logistics
-annual_income: USD 96,000
-product: stabilized commercial real estate
-facility:
-  loan_amount: USD 3,600,000
-  property_value: USD 5,000,000
-  ltv: 72%
-  dscr: 1.10x
-  vacancy_stress: 10%
-attached_documents:
-  - 2 years tax returns
-  - YTD P&L
-  - CRE valuation
-narrative: I, Bram Cotter of Fabrikam Logistics, apply for a stabilized commercial real estate facility of USD 3,600,000 on a property valued at USD 5,000,000. Stated LTV is 72% and DSCR is 1.10x.
----
-
 # Credit application CA-2026-000202
 
 I am filing this synthetic credit application with Contoso Demo Bank. This is not a real borrower record.

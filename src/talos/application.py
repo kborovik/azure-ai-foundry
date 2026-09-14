@@ -10,7 +10,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
-import yaml
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, TemplateError
 from azure.core.credentials import TokenCredential
 from azure.identity import DefaultAzureCredential
@@ -69,7 +68,17 @@ REQUIRED_JSON_KEYS = (
 REQUIRED_FACILITY_KEYS = ("loan_amount",)
 SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 NATIONAL_ID_RE = re.compile(r"\b\d{6}[- ]\d{4}\b")
-FRONT_MATTER_RE = re.compile(r"^---\n(.*?)\n---", re.M | re.S)
+CREDIT_APPLICATION_HEADING_RE = re.compile(r"^# Credit application (CA-\d{4}-\d{6})$")
+IDENTITY_FIELD_BY_LABEL = {
+    "name": "customer_name",
+    "customer id": "customer_id",
+    "address": "address",
+    "age band": "age_band",
+    "employer": "employer",
+    "annual income": "annual_income",
+    "email": "email",
+    "phone": "phone",
+}
 JUDGEMENT_LEAK_RE = re.compile(
     r"application_type|intended_outcome|expected_judgement|missing_items|"
     r"\bmissing-data\b|\bapplicationtype\b|"
@@ -263,26 +272,95 @@ def parse_llm_json(text: str) -> dict[str, Any]:
     return data
 
 
+def credit_application_heading(application_id: str) -> str:
+    return f"# Credit application {application_id}"
+
+
+def _yaml_prefix_present(text: str) -> bool:
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("# Credit application "):
+            return False
+        if stripped == "---":
+            return True
+    return False
+
+
+def _markdown_sections(text: str) -> dict[str, str]:
+    sections: dict[str, list[str]] = {}
+    current: str | None = None
+    for line in text.splitlines():
+        if line.startswith("## "):
+            current = line[3:].strip().casefold()
+            sections[current] = []
+            continue
+        if current is not None:
+            sections[current].append(line)
+    return {key: "\n".join(lines).strip() for key, lines in sections.items()}
+
+
+def _parse_labeled_bullets(block: str) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for line in block.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("- ") or ":" not in stripped:
+            continue
+        key, value = stripped[2:].split(":", 1)
+        result[key.strip()] = value.strip()
+    return result
+
+
+def _parse_plain_bullets(block: str) -> list[str]:
+    return [
+        line.strip()[2:].strip()
+        for line in block.splitlines()
+        if line.strip().startswith("- ")
+    ]
+
+
 def parse_application_markdown(text: str) -> dict[str, Any]:
-    if first_visible_line(text) != WATERMARK:
+    first = first_visible_line(text)
+    if first == WATERMARK:
         raise TalosError(
-            f"first visible line must be {WATERMARK!r}",
+            "application markdown must not start with the policy watermark",
             exit_code=1,
         )
-    match = FRONT_MATTER_RE.search(text)
-    if match is None:
+    if _yaml_prefix_present(text):
         raise TalosError(
-            "application markdown is missing YAML front matter", exit_code=1
+            "application markdown must not include YAML front matter",
+            exit_code=1,
         )
-    try:
-        data = yaml.safe_load(match.group(1))
-    except yaml.YAMLError as exc:
+    heading = CREDIT_APPLICATION_HEADING_RE.fullmatch(first)
+    if heading is None:
         raise TalosError(
-            f"invalid application front matter: {exc}", exit_code=1
-        ) from exc
-    if not isinstance(data, dict):
-        raise TalosError("application front matter must be a mapping", exit_code=1)
-    return data
+            "first visible line must be '# Credit application CA-YYYY-NNNNNN', "
+            f"got {first!r}",
+            exit_code=1,
+        )
+    sections = _markdown_sections(text)
+    identity_labels = _parse_labeled_bullets(sections.get("identity", ""))
+    identity = {
+        IDENTITY_FIELD_BY_LABEL[label.casefold()]: value
+        for label, value in identity_labels.items()
+        if label.casefold() in IDENTITY_FIELD_BY_LABEL
+    }
+    return {
+        "application_id": heading.group(1),
+        "customer_name": identity.get("customer_name", ""),
+        "customer_id": identity.get("customer_id", ""),
+        "email": identity.get("email", ""),
+        "phone": identity.get("phone", ""),
+        "address": identity.get("address", ""),
+        "age_band": identity.get("age_band", ""),
+        "employer": identity.get("employer", ""),
+        "annual_income": identity.get("annual_income", ""),
+        "product": sections.get("product", "").strip(),
+        "facility": _parse_labeled_bullets(sections.get("amount and financials", "")),
+        "attached_documents": _parse_plain_bullets(
+            sections.get("attached documents", "")
+        ),
+        "narrative": sections.get("applicant statement", "").strip(),
+    }
 
 
 def read_application_manifest(out: Path) -> dict[str, Any]:
@@ -502,11 +580,15 @@ def validate_record(
 
 def validate_filing_markdown(markdown: str, record: dict[str, Any]) -> list[str]:
     errors: list[str] = []
-    if first_visible_line(markdown) != WATERMARK:
-        errors.append(f"first visible line must be {WATERMARK!r}")
+    application_id = str(record.get("application_id") or "")
+    expected = credit_application_heading(application_id)
+    first = first_visible_line(markdown)
+    if first != expected:
+        errors.append(f"first visible line must be {expected!r}, got {first!r}")
+    if _yaml_prefix_present(markdown):
+        errors.append("YAML front matter is forbidden")
     if JUDGEMENT_LEAK_RE.search(markdown):
         errors.append("filing must not contain ApplicationType or judgement labels")
-    application_id = str(record.get("application_id") or "")
     if contains_forbidden_outcome_token(application_id):
         errors.append("application_id encodes an outcome token")
     if re.fullmatch(
@@ -542,10 +624,7 @@ def render_application(
         keep_trailing_newline=True,
     )
     try:
-        markdown = env.get_template(template_path.name).render(
-            app=record,
-            watermark=WATERMARK,
-        )
+        markdown = env.get_template(template_path.name).render(app=record)
     except TemplateError as exc:
         raise TalosError(f"Failed to render application: {exc}", exit_code=1) from exc
     if not markdown.endswith("\n"):

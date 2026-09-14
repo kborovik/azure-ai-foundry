@@ -1,29 +1,3 @@
-{{ watermark }}
-
----
-application_id: {{ app.application_id }}
-customer_name: {{ app.customer_name }}
-customer_id: {{ app.customer_id }}
-email: {{ app.email }}
-phone: {{ app.phone }}
-address: {{ app.address }}
-age_band: {{ app.age_band }}
-employer: {{ app.employer }}
-annual_income: {{ app.annual_income }}
-product: {{ app.product }}
-facility:
-{% for key, value in app.facility.items() %}  {{ key }}: {{ value | tojson }}
-{% endfor %}
-{% if app.attached_documents %}
-attached_documents:
-{% for title in app.attached_documents %}  - {{ title | tojson }}
-{% endfor %}
-{% else %}
-attached_documents: []
-{% endif %}
-narrative: {{ app.narrative | tojson }}
----
-
 # Credit application {{ app.application_id }}
 
 I am filing this synthetic credit application with Contoso Demo Bank. This is not a real borrower record.

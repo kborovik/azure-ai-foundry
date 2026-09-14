@@ -13,6 +13,7 @@ from talos.application import (
     application_filename,
     attached_documents_for,
     contains_forbidden_outcome_token,
+    credit_application_heading,
     parse_application_markdown,
     parse_llm_json,
     run_generate_application,
@@ -181,7 +182,9 @@ def test_generate_one_slot_writes_opaque_customer_filing(tmp_path: Path) -> None
     assert filename == f"credit-application-{application_id}.md"
     path = out / filename
     text = path.read_text(encoding="utf-8")
-    assert first_visible_line(text) == WATERMARK
+    assert first_visible_line(text) == credit_application_heading(application_id)
+    assert not text.lstrip().startswith(WATERMARK)
+    assert not text.lstrip().startswith("---")
     parsed = parse_application_markdown(text)
     assert parsed["application_id"] == application_id
     assert parsed["customer_id"] == "SYN-111111"
@@ -397,7 +400,11 @@ def test_fixtures_parse_and_cover_each_type() -> None:
         filename = str(record["filename"])
         path = FIXTURES / filename
         text = path.read_text(encoding="utf-8")
-        assert first_visible_line(text) == WATERMARK
+        assert first_visible_line(text) == credit_application_heading(
+            str(record["application_id"])
+        )
+        assert not text.lstrip().startswith(WATERMARK)
+        assert not text.lstrip().startswith("---")
         assert filename == f"credit-application-{record['application_id']}.md"
         assert re.fullmatch(APPLICATION_ID_RE, str(record["application_id"]))
         assert not contains_forbidden_outcome_token(str(record["application_id"]))
@@ -501,3 +508,45 @@ def test_validate_record_checks_facility_limits() -> None:
 def test_parse_llm_json_strips_fence() -> None:
     data = parse_llm_json('```json\n{"a": 1}\n```')
     assert data == {"a": 1}
+
+
+def test_generated_markdown_opens_with_heading_not_watermark(tmp_path: Path) -> None:
+    out = tmp_path / "apps"
+    rendered = run_generate_application(
+        _config(out),
+        completer=ScriptedCompleter([_valid_record("accepted")]),
+        echo=lambda _: None,
+    )
+    text = (out / rendered[0].filename).read_text(encoding="utf-8")
+    heading = credit_application_heading(rendered[0].record["application_id"])
+    assert first_visible_line(text) == heading
+    assert text.startswith(heading)
+    assert WATERMARK not in text.splitlines()[0]
+
+
+def test_generated_markdown_has_no_yaml_frontmatter(tmp_path: Path) -> None:
+    out = tmp_path / "apps"
+    rendered = run_generate_application(
+        _config(out),
+        completer=ScriptedCompleter([_valid_record("accepted")]),
+        echo=lambda _: None,
+    )
+    text = (out / rendered[0].filename).read_text(encoding="utf-8")
+    before_heading: list[str] = []
+    for line in text.splitlines():
+        if line.startswith("# Credit application "):
+            break
+        before_heading.append(line.strip())
+    assert "---" not in before_heading
+    with pytest.raises(TalosError, match="YAML front matter"):
+        parse_application_markdown(
+            "---\napplication_id: CA-2026-000001\n---\n"
+            "# Credit application CA-2026-000001\n"
+        )
+
+
+def test_parse_rejects_watermark_prefix() -> None:
+    with pytest.raises(TalosError, match="must not start with the policy watermark"):
+        parse_application_markdown(
+            f"{WATERMARK}\n\n# Credit application CA-2026-000001\n"
+        )
