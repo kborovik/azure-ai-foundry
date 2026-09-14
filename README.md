@@ -25,39 +25,9 @@ flowchart TB
 - **Policy Q&A** — quote the number, the conditions, and the source document.
 - **Application evaluation** — compare a sample filing to published policy and return accept, reject, or missing-data. Findings cite policy documents only.
 
-**From Teams chat to a cited answer**
-
-```mermaid
-sequenceDiagram
-  participant U as Microsoft Teams
-  participant BOT as Azure Bot
-  participant A as Foundry Agent
-  participant KB as Foundry IQ
-
-  U->>BOT: 1:1 chat
-  BOT->>A: message
-  A->>KB: look up documents
-  KB-->>A: passages and citations
-  A->>A: grounded answer, or refuse if empty
-  A-->>BOT: text and citations
-  BOT-->>U: 1:1 reply
-```
-
 ## Design
 
 One agent, one knowledge base, one 1:1 Teams chat. Published policy is the source of truth; sample applications are the files being judged; the model is not.
-
-**How documents reach the knowledge base**
-
-Credit policies live in this repository. Sample applications are generated for the demo. Both are stored, then indexed, then served from one knowledge base.
-
-```mermaid
-flowchart TB
-  Pol[Credit policies<br/>in this repository] --> Store[Document storage]
-  Apps[Sample applications<br/>generated for the demo] --> Store
-  Store --> Search[Enterprise search]
-  Search --> KB[Knowledge base]
-```
 
 **One agent, one knowledge base, 1:1 chat**
 
@@ -88,6 +58,36 @@ flowchart TB
   KB --> Apps
 ```
 
+**From Teams chat to a cited answer**
+
+```mermaid
+sequenceDiagram
+  participant U as Microsoft Teams
+  participant BOT as Azure Bot
+  participant A as Foundry Agent
+  participant KB as Foundry IQ
+
+  U->>BOT: 1:1 chat
+  BOT->>A: message
+  A->>KB: look up documents
+  KB-->>A: passages and citations
+  A->>A: grounded answer, or refuse if empty
+  A-->>BOT: text and citations
+  BOT-->>U: 1:1 reply
+```
+
+**How documents reach the knowledge base**
+
+Credit policies live in this repository. Sample applications are generated for the demo. Both are stored, then indexed, then served from one knowledge base.
+
+```mermaid
+flowchart TB
+  Pol[Credit policies<br/>in this repository] --> Store[Document storage]
+  Apps[Sample applications<br/>generated for the demo] --> Store
+  Store --> Search[Enterprise search]
+  Search --> KB[Knowledge base]
+```
+
 Azure underneath is a single subscription with document storage, enterprise search, a Foundry project, and the chat and embedding models the agent uses.
 
 **Azure resources**
@@ -100,11 +100,9 @@ flowchart TB
   Project --> Agent[Credit Policy Agent]
 ```
 
-## Azure Foundry Agent Service
+## From repository to Teams
 
 Getting from this repository to a working Teams chat is four steps. An engineer runs them; the picture is the process.
-
-**From repository to Teams**
 
 ```mermaid
 flowchart TB
