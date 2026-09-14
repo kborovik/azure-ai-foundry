@@ -64,21 +64,11 @@ default: help
 # Tests and local loop
 ###############################################################################
 
-test: .venv ## Unit tests (no Azure)
-	$(call header,Running unit tests)
-	$(UV) run pytest
-
 check: .venv ## Check Python code
 	$(call header,Checking)
 	$(UV) run ruff format --check
 	$(UV) run ruff check
-	$(MAKE) test
-
-generate: .venv ## Render corpus locally
-	$(call header,Generating credit policies)
-	$(UV) run talos generate policy --local-only
-	$(call header,Generating client applications)
-	$(UV) run talos generate application --all --local-only
+	$(UV) run pytest
 
 deploy: .venv infra-create ## Provision Foundry IQ + agent
 	$(call need-terraform)
@@ -223,12 +213,6 @@ infra-status: ## Concise live Azure resource status
 			fi; \
 		} | column -t -s "$$tab"; \
 	}
-
-infra:
-	$(error use gmake infra-create)
-
-infra-backend:
-	$(error use gmake infra-backend-create)
 
 infra-destroy: infra-init ## terraform destroy workload stack; drop infra/outputs.json (ENV=dev1|prd1)
 	$(call header,Terraform destroy $(ENV))
