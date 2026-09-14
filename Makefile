@@ -65,11 +65,15 @@ default: help
 ###############################################################################
 
 ##@ Local:
+test: .venv
+	$(call header,Running unit tests)
+	$(UV) run pytest
+
 check: .venv ## Check Python code
 	$(call header,Checking)
 	$(UV) run ruff format --check
 	$(UV) run ruff check
-	$(UV) run pytest
+	$(MAKE) test
 
 generate: .venv ## Generate Client Applications
 	$(call header,Generating client applications)
