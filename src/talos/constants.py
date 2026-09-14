@@ -20,6 +20,9 @@ DEFAULT_BOT_NAME = "bot-credit-policy-agent"
 DEFAULT_PUBLISH_DISPLAY_NAME = "Credit Policy Agent"
 DEFAULT_APP_VERSION = "1.0.0"
 DEFAULT_DEVELOPER_NAME = "Contoso Demo Bank"
+DEFAULT_DEVELOPER_WEBSITE_URL = "https://azure.microsoft.com"
+DEFAULT_PRIVACY_URL = "https://privacy.microsoft.com"
+DEFAULT_TERMS_OF_USE_URL = "https://www.microsoft.com/legal/terms-of-use"
 DEFAULT_PUBLISH_SHORT_DESCRIPTION = (
     "Cited credit-policy answers and synthetic application evaluation."
 )

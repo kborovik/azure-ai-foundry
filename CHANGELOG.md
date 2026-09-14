@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- **`talos publish`:** POST `/microsoft365/publish` now sends `developerWebsiteUrl`, `privacyUrl`, and `termsOfUseUrl` (HTTPS). Foundry 400s without them (`DeveloperWebsiteUrl must be a valid HTTPS URL`). Defaults match the Microsoft sample; override with `--developer-website-url`, `--privacy-url`, `--terms-of-use-url`. Invalid URLs fail locally before the request.
+
 ### Changed
 
 - **Unique application serials:** `talos generate application` mints `CA-{YYYYMMDD}-{unix_ms}` via SerialAllocator (bump `unix_ms` on collision). `--count N` writes N files per selected type (`--all --count N` → 3N). Generate always appends unless `--force --application-id` regenerates a named serial. `--force` without `--application-id` or with `--count` is a usage error. Manifest is keyed by `application_id`. `talos deploy --wait` requires application processed ≥ local corpus size.

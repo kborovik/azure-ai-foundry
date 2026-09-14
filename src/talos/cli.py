@@ -18,6 +18,9 @@ from talos.constants import (
     DEFAULT_CONNECTION_NAME,
     DEFAULT_CONTAINER,
     DEFAULT_DEVELOPER_NAME,
+    DEFAULT_DEVELOPER_WEBSITE_URL,
+    DEFAULT_PRIVACY_URL,
+    DEFAULT_TERMS_OF_USE_URL,
     DEFAULT_EMBEDDING_DEPLOYMENT,
     DEFAULT_FACTS_RELATIVE,
     DEFAULT_INSTRUCTIONS_RELATIVE,
@@ -481,6 +484,24 @@ def deploy(
     help="Store developer name (max 32 characters).",
 )
 @click.option(
+    "--developer-website-url",
+    default=DEFAULT_DEVELOPER_WEBSITE_URL,
+    show_default=True,
+    help="Store developer website (must be a valid HTTPS URL).",
+)
+@click.option(
+    "--privacy-url",
+    default=DEFAULT_PRIVACY_URL,
+    show_default=True,
+    help="Privacy statement URL (must be a valid HTTPS URL).",
+)
+@click.option(
+    "--terms-of-use-url",
+    default=DEFAULT_TERMS_OF_USE_URL,
+    show_default=True,
+    help="Terms of use URL (must be a valid HTTPS URL).",
+)
+@click.option(
     "--tenant-id",
     default=None,
     help="Microsoft Entra tenant id. Default $AZURE_TENANT_ID or the access token tid.",
@@ -510,6 +531,9 @@ def publish(
     display_name: str,
     app_version: str,
     developer_name: str,
+    developer_website_url: str,
+    privacy_url: str,
+    terms_of_use_url: str,
     tenant_id: str | None,
     skip_endpoint_patch: bool,
     dry_run: bool,
@@ -542,6 +566,9 @@ def publish(
             display_name=display_name,
             app_version=app_version,
             developer_name=developer_name,
+            developer_website_url=developer_website_url,
+            privacy_url=privacy_url,
+            terms_of_use_url=terms_of_use_url,
             tenant_id=_first(tenant_id, env.get("AZURE_TENANT_ID")),
             dry_run=dry_run,
             skip_endpoint_patch=skip_endpoint_patch,

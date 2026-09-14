@@ -11,6 +11,9 @@ from talos.constants import (
     ACTIVITY_PROTOCOL_API_VERSION,
     BOT_API_VERSION,
     BOT_CHANNEL_API_VERSION,
+    DEFAULT_DEVELOPER_WEBSITE_URL,
+    DEFAULT_PRIVACY_URL,
+    DEFAULT_TERMS_OF_USE_URL,
     PUBLISH_SCOPE_JUST_YOU,
 )
 from talos.env import repo_root
@@ -158,6 +161,9 @@ def test_dry_run_makes_no_rest_calls() -> None:
     assert "BotServiceRbac" in joined
     assert PUBLISH_SCOPE_JUST_YOU in joined
     assert "microsoft365/publish" in joined
+    assert DEFAULT_DEVELOPER_WEBSITE_URL in joined
+    assert DEFAULT_PRIVACY_URL in joined
+    assert DEFAULT_TERMS_OF_USE_URL in joined
 
 
 def test_happy_path_patches_then_puts_bot_then_publishes_shared() -> None:
@@ -192,6 +198,9 @@ def test_happy_path_patches_then_puts_bot_then_publishes_shared() -> None:
     assert publish.json_body["publishScope"] == PUBLISH_SCOPE_JUST_YOU
     assert publish.json_body["publishAsAutopilot"] is False
     assert publish.json_body["appVersion"] == "1.0.0"
+    assert publish.json_body["developerWebsiteUrl"] == DEFAULT_DEVELOPER_WEBSITE_URL
+    assert publish.json_body["privacyUrl"] == DEFAULT_PRIVACY_URL
+    assert publish.json_body["termsOfUseUrl"] == DEFAULT_TERMS_OF_USE_URL
     expected_bot = bot_arm_id(
         "00000000-0000-0000-0000-000000000000", "demo", "bot-credit-policy-agent"
     )
@@ -241,6 +250,18 @@ def test_invalid_app_version_rejected() -> None:
         run_publish(_config(app_version="0.1.0", dry_run=True), echo=lambda _: None)
 
 
+def test_invalid_developer_website_url_rejected() -> None:
+    with pytest.raises(TalosError, match="HTTPS URL"):
+        run_publish(
+            _config(developer_website_url="", dry_run=True), echo=lambda _: None
+        )
+    with pytest.raises(TalosError, match="HTTPS URL"):
+        run_publish(
+            _config(developer_website_url="http://azure.microsoft.com", dry_run=True),
+            echo=lambda _: None,
+        )
+
+
 def test_cli_publish_help_documents_just_you_flags() -> None:
     result = CliRunner().invoke(cli, ["publish", "--help"])
     assert result.exit_code == 0, result.output
@@ -251,6 +272,9 @@ def test_cli_publish_help_documents_just_you_flags() -> None:
         "--skip-endpoint-patch",
         "--app-version",
         "--bot-arm-id",
+        "--developer-website-url",
+        "--privacy-url",
+        "--terms-of-use-url",
     ):
         assert flag in result.output
     assert "Just you" in result.output

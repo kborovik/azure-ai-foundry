@@ -27,7 +27,7 @@ Portal or REST. Both set `publishScope=Shared` (Just you) and `BotServiceRbac`. 
 
 ### REST (`talos publish`)
 
-Optional automation of the same Just-you path. Creates (or updates) an Azure Bot Service resource with the Teams channel, merge-patches Activity + `BotServiceRbac` while keeping existing `responses` / `Entra`, then POSTs Foundry's Microsoft 365 publish API.
+Optional automation of the same Just-you path. Creates (or updates) an Azure Bot Service resource with the Teams channel, merge-patches Activity + `BotServiceRbac` while keeping existing `responses` / `Entra`, then POSTs Foundry's Microsoft 365 publish API. The POST body includes store metadata URLs (`developerWebsiteUrl`, `privacyUrl`, `termsOfUseUrl`); Foundry rejects the request with 400 if any is missing or not `https://`. Defaults are Microsoft placeholder URLs; override with `--developer-website-url`, `--privacy-url`, `--terms-of-use-url`.
 
 ```bash
 uv run talos publish --dry-run

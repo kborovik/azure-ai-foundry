@@ -5,7 +5,7 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 from azure.core.credentials import TokenCredential
 from azure.identity import DefaultAzureCredential
@@ -19,9 +19,12 @@ from talos.constants import (
     DEFAULT_APP_VERSION,
     DEFAULT_BOT_NAME,
     DEFAULT_DEVELOPER_NAME,
+    DEFAULT_DEVELOPER_WEBSITE_URL,
+    DEFAULT_PRIVACY_URL,
     DEFAULT_PUBLISH_DISPLAY_NAME,
     DEFAULT_PUBLISH_FULL_DESCRIPTION,
     DEFAULT_PUBLISH_SHORT_DESCRIPTION,
+    DEFAULT_TERMS_OF_USE_URL,
     FOUNDRY_API_VERSION,
     FOUNDRY_SCOPE,
     PUBLISH_SCOPE_JUST_YOU,
@@ -45,6 +48,9 @@ class PublishConfig:
     display_name: str = DEFAULT_PUBLISH_DISPLAY_NAME
     app_version: str = DEFAULT_APP_VERSION
     developer_name: str = DEFAULT_DEVELOPER_NAME
+    developer_website_url: str = DEFAULT_DEVELOPER_WEBSITE_URL
+    privacy_url: str = DEFAULT_PRIVACY_URL
+    terms_of_use_url: str = DEFAULT_TERMS_OF_USE_URL
     short_description: str = DEFAULT_PUBLISH_SHORT_DESCRIPTION
     full_description: str = DEFAULT_PUBLISH_FULL_DESCRIPTION
     tenant_id: str = ""
@@ -205,7 +211,19 @@ def publish_body(config: PublishConfig, resolved_bot_arm_id: str) -> dict[str, A
         "shortDescription": config.short_description,
         "fullDescription": config.full_description,
         "developerName": config.developer_name,
+        "developerWebsiteUrl": config.developer_website_url,
+        "privacyUrl": config.privacy_url,
+        "termsOfUseUrl": config.terms_of_use_url,
     }
+
+
+def require_https_url(label: str, value: str) -> None:
+    parsed = urlparse(value)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise TalosError(
+            f"{label} must be a valid HTTPS URL (got {value!r})",
+            exit_code=1,
+        )
 
 
 def validate_publish_metadata(config: PublishConfig) -> None:
@@ -224,6 +242,9 @@ def validate_publish_metadata(config: PublishConfig) -> None:
             "app version must contain only digits and periods and cannot start with 0",
             exit_code=1,
         )
+    require_https_url("developer website URL", config.developer_website_url)
+    require_https_url("privacy URL", config.privacy_url)
+    require_https_url("terms of use URL", config.terms_of_use_url)
 
 
 def run_publish(
@@ -406,6 +427,9 @@ def _echo_dry_run(
     echo(f"  display name: {config.display_name}")
     echo(f"  publishScope: {PUBLISH_SCOPE_JUST_YOU}")
     echo(f"  appVersion: {config.app_version}")
+    echo(f"  developerWebsiteUrl: {config.developer_website_url}")
+    echo(f"  privacyUrl: {config.privacy_url}")
+    echo(f"  termsOfUseUrl: {config.terms_of_use_url}")
     echo(f"  resource group: {config.resource_group}")
     echo(f"  subscription: {subscription_id}")
     echo(f"  bot: {config.bot_name}")
