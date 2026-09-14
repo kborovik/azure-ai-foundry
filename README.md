@@ -1,14 +1,32 @@
 # Bank Credit Policy Agent Demo
 
-A Foundry Agent Service prompt agent that answers credit-policy questions from a synthetic document corpus, with citations, in Microsoft Teams.
+A Microsoft Teams assistant that evaluates client applications against published credit policy and helps a credit officer process the file — with citations.
 
 ## Executive Summary
 
-Relationship managers and credit officers need a cited answer to questions such as “what is max LTV on an investment property?” during a live deal. Today that means paging through policy PDFs. Generic chat models invent LTV, DTI, and committee names.
+Credit officers process applications against published policy: read the filing, check LTV, DTI, and required documents, and record a decision. Today that means paging through policy PDFs while the deal is live. Generic chat models invent thresholds, committees, and eligibility rules.
 
-This repository is a **demo**, not a production credit system. It shows a Foundry Agent Service prompt agent grounded on a Foundry IQ knowledge base. The source of truth is twelve synthetic bank credit-policy Markdown files plus gitignored synthetic client applications in Azure Blob Storage. End users chat with the agent in Microsoft Teams 1:1 for policy questions and application evaluation by `application_id` or `customer_name`.
+This repository is a **demo**, not a production origination system. It shows a Foundry Agent Service assistant that evaluates a sample application and helps the credit officer work the file in Microsoft Teams, one-to-one. Name an application by number or customer; the agent compares it to twelve synthetic credit-policy documents, flags missing items, and returns a cited judgement — accept, reject, or missing-data. Policy lookup is in service of that workflow. If the published policies do not cover the question, the agent says so rather than guessing.
 
-## Runtime Sequence
+## How it works
+
+**How a credit officer gets an answer**
+
+```mermaid
+flowchart TB
+  A[Credit Officer<br/>asks in Teams] --> B[Credit Policy Agent]
+  B --> C[Knowledge base<br/>looks up published documents]
+  C --> D{Did the policies<br/>cover the question?}
+  D -->|Yes| E[Cited answer]
+  D -->|No| F[That is not in the<br/>published policies]
+```
+
+**The agent does two jobs:**
+
+- **Policy Q&A** — quote the number, the conditions, and the source document.
+- **Application evaluation** — compare a sample filing to published policy and return accept, reject, or missing-data. Findings cite policy documents only.
+
+**From Teams chat to a cited answer**
 
 ```mermaid
 sequenceDiagram
@@ -28,77 +46,72 @@ sequenceDiagram
   BOT-->>U: 1:1 reply
 ```
 
-## Azure Infrastructure
+## Design
 
-Terraform CLI in `infra/` provisions Storage, Azure AI Search (Basic), and a Microsoft Foundry project with `gpt-5-mini` and `text-embedding-3-large`. There is no `azure.yaml` and no Azure Developer CLI (`azd`).
+One agent, one knowledge base, one Teams channel. The documents are the source of truth; the model is not.
 
-**Create Azure resources**
+**One agent, one knowledge base, one channel**
 
-Remote state lives in shared resource group `terraform-state-shared` (reused across projects; not the workload `stcp*` storage account). Bootstrap once, then apply `dev1` or `prd1`:
+```mermaid
+flowchart TB
+  subgraph People
+    RM[Credit Officer]
+  end
 
-```bash
-gmake infra-backend-create   # once: tfstate RG + storage
-gmake infra-plan             # terraform plan (ENV=dev1)
-gmake infra-create           # ENV=dev1 by default
-gmake infra-create ENV=prd1
-gmake infra-show             # terraform show for ENV
-gmake ai-account             # live Foundry account + model deployments
-gmake ai-project             # live Foundry project
-gmake ai-agent               # live prompt agent
-gmake ai-search              # live Azure AI Search
-gmake ai-storage             # live Storage account + containers + blobs
-gmake infra-destroy ENV=dev1
-gmake infra-backend-destroy  # drops the tfstate account
+  subgraph Channel
+    Teams[Microsoft Teams<br/>1:1 chat]
+  end
+
+  subgraph Foundry["Azure Foundry Agent Service"]
+    Agent[Prompt Agent]
+    KB[Knowledge Base]
+  end
+
+  subgraph Corpus["Published Documents"]
+    Pol[Credit Policies]
+    Apps[Client Applications]
+  end
+
+  RM --> Teams
+  Teams --> Agent
+  Agent --> KB
+  KB --> Pol
+  KB --> Apps
 ```
 
-Equivalent:
+Azure underneath is a single subscription with document storage, enterprise search, a Foundry project, and the chat and embedding models the agent uses.
 
-```bash
-az login
-export ARM_SUBSCRIPTION_ID=<subscription>
-export ARM_USE_AZUREAD=true
-az group create --name terraform-state-shared --location swedencentral
-az storage account create --name lab5tfstate1 \
-  --resource-group terraform-state-shared --location swedencentral \
-  --sku Standard_LRS --kind StorageV2 --min-tls-version TLS1_2 \
-  --allow-blob-public-access false --https-only true
-az storage container create --name tfstate --account-name lab5tfstate1
-az role assignment create --role "Storage Blob Data Contributor" \
-  --assignee <operator-object-id> \
-  --scope /subscriptions/<subscription>/resourceGroups/terraform-state-shared/providers/Microsoft.Storage/storageAccounts/lab5tfstate1
-terraform -chdir=infra init -reconfigure \
-  -backend-config="storage_account_name=lab5tfstate1" \
-  -backend-config="key=dev1.tfstate"
-terraform -chdir=infra apply -var-file=dev1.tfvars
+**Azure resources**
+
+```mermaid
+flowchart TB
+  Store[Document Storage] --> Search[Enterprise Search]
+  Search --> Project[Foundry Project]
+  Models[LLM Models<br/>Embedding Models] --> Project
+  Project --> Agent[Credit Policy Agent]
 ```
 
-`terraform apply` deploys the resource group, Storage, Search, Foundry, model deployments, and RBAC. It does not create Foundry IQ objects. Environment names are `dev1` and `prd1` only.
+## Azure Foundry Agent Service
 
-`gmake infra-create` writes `infra/outputs.json` after apply. `uv run talos generate` and `uv run talos deploy` fill missing canonical names from that file unless you pass `--no-terraform`. They never spawn `terraform output`. CLI flags override process environment variables. A stray `.env` is gitignored and is not loaded. Terraform state (`*.tfstate`) and `infra/outputs.json` are gitignored and are never committed. Standing `terraform init -reconfigure` reconstructs the azurerm backend after clone.
+Getting from this repository to a working Teams chat is four steps. An engineer runs them; the picture is the process.
 
-## Talos CLI
+**From repository to Teams**
 
-```bash
-uv python pin 3.14 && uv python install 3.14   # once per clone
-uv run talos --help
-uv run talos generate --help                  # group; bare command exits 2
-uv run talos generate policy --local-only
-uv run talos generate application --all --local-only
-uv run talos deploy --help
-uv run talos deploy --wait                    # blob-sync both corpora, two KS, two indexers
-uv run talos publish --dry-run                # optional Teams Just-you REST
-uv run talos publish
-gmake test                                    # unit pytest (marker unit)
-gmake check                                   # ruff + unit tests
+```mermaid
+flowchart TB
+  S1[1. Create Azure Resources] --> S2[2. Load Documents]
+  S2 --> S3[3. Activate Agent]
+  S3 --> S4[4. Publish Agent in Teams]
 ```
 
-`talos generate` is a Click group. `talos generate policy` renders the committed 12 policy files and does not run deploy. `talos generate application` calls Foundry `gpt-5-mini` for a unique SyntheticBorrower (`--type` or `--all`; `--count N` mints N serials per type; `--force --application-id` regenerates a named serial). Files are `credit-application-{application_id}.md` with opaque ids `CA-{YYYYMMDD}-{unix_ms}`. Intended outcome lives in gitignored `manifest.json` keyed by `application_id`. Generated applications under `data/client-applications/` are gitignored. `talos deploy` hash-skips blob upload of both local corpora, PUTs `ks-credit-policies` and `ks-client-applications`, runs both indexers, and PUTs `kb-credit-policies` with both sources. `--wait` requires application processed ≥ local corpus size.
+1. **Create Azure Resources.** A development environment and a production-shaped environment. Each one gets document storage, enterprise search, a Foundry project, and the models the agent uses. Both environments are the same shape so a demo in the lab matches what production would look like.
 
-Teams publish is Just you (`BotServiceRbac`). Portal Direct publish or optional `uv run talos publish` (REST). Sideload is the fallback. See [docs/teams.md](docs/teams.md). Hosted agents and a custom Microsoft 365 Agents SDK host are not v1; see [docs/hosted-agents.md](docs/hosted-agents.md).
+2. **Load Documents.** The twelve synthetic credit policies (kept in this repository) and generated sample applications are uploaded and indexed. Until this step finishes, the agent has nothing grounded to quote.
 
-## GitHub Actions
+3. **Activate Agent.** The prompt agent is created in Foundry with a single instruction: answer only from the knowledge base, and cite the source. It cannot invent LTV, DTI, or committee names, and it will not override published policy.
 
-- [`.github/workflows/test.yml`](.github/workflows/test.yml) — every push and pull request: `uv run pytest` (unit marker, CPython 3.14).
-- [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) — GitHub **release** `published` only (when `AZURE_CLIENT_ID` is set): OIDC login, `terraform -chdir=infra init` with backend key `prd1.tfstate`, write `infra/outputs.json`, `uv run talos deploy --wait`, then live pytest markers.
+4. **Publish Agent in Teams.** Publish as a private 1:1 chat for the operator. If the tenant blocks that path, sideload the Teams app instead. A relationship manager then asks a policy question, or names an application to evaluate. See [docs/teams.md](docs/teams.md).
 
-Create a GitHub environment `credit-policy-live` and repository variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`. Federate a user-assigned identity to that environment. CI writes `infra/outputs.json` from Terraform state when it is available; otherwise set the canonical Azure env vars on that environment. Do not put secrets in git.
+A production release repeats steps 2–4 against the live environment: refresh documents, re-index, keep the agent pointed at the published policies. Every code change is tested automatically; secrets are not stored in git.
+
+This demo does not ship a second, container-hosted agent or a custom Teams bot. Foundry already bridges the prompt agent into Teams. Reopen that work only if a later version needs custom code inside the agent loop. See [docs/hosted-agents.md](docs/hosted-agents.md).
