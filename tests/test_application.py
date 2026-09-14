@@ -33,7 +33,7 @@ from talos.constants import (
 from talos.env import repo_root
 from talos.errors import TalosError
 from talos.generate import first_visible_line
-from tests.fakes import FakeBlobStore
+from tests.fakes import FakeBlob, FakeBlobStore
 from tests.helpers import load_application_fixtures
 
 pytestmark = pytest.mark.unit
@@ -366,6 +366,77 @@ def test_missing_project_endpoint_exits_2(
     assert "AZURE_AI_PROJECT_ENDPOINT" in result.output
 
 
+def test_force_overwrite_deletes_previous_application_blob(tmp_path: Path) -> None:
+    out = tmp_path / "apps"
+    out.mkdir()
+    old_name = "credit-application-CA-2025-000099.md"
+    (out / old_name).write_text(
+        "# Credit application CA-2025-000099\n", encoding="utf-8"
+    )
+    (out / "manifest.json").write_text(
+        json.dumps(
+            {
+                "documents": [
+                    {
+                        "slot": "accepted",
+                        "application_id": "CA-2025-000099",
+                        "intended_outcome": "accepted",
+                        "filename": old_name,
+                        "customer_name": "Old Person",
+                        "customer_id": "SYN-000001",
+                        "product_family": "residential_mortgage",
+                    }
+                ]
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    store = FakeBlobStore(container="client-applications")
+    store.blobs[old_name] = FakeBlob(data=b"old", metadata={})
+    store.blobs["accepted.md"] = FakeBlob(data=b"legacy", metadata={})
+    rendered = run_generate_application(
+        _config(out, local_only=False, force=True),
+        completer=ScriptedCompleter([_valid_record("accepted")]),
+        blob_store=store,
+        echo=lambda _: None,
+    )
+    new_name = rendered[0].filename
+    assert new_name != old_name
+    assert old_name not in store.blobs
+    assert "accepted.md" not in store.blobs
+    assert new_name in store.blobs
+    assert not (out / old_name).exists()
+    assert not (out / "accepted.md").exists()
+
+
+def test_orphan_local_application_files_are_removed(tmp_path: Path) -> None:
+    out = tmp_path / "apps"
+    out.mkdir()
+    (out / "credit-application-CA-2025-000050.md").write_text(
+        "orphan\n", encoding="utf-8"
+    )
+    rendered = run_generate_application(
+        _config(out),
+        completer=ScriptedCompleter([_valid_record("accepted")]),
+        echo=lambda _: None,
+    )
+    assert not (out / "credit-application-CA-2025-000050.md").exists()
+    assert (out / rendered[0].filename).is_file()
+
+
+def test_corrupt_manifest_fails(tmp_path: Path) -> None:
+    out = tmp_path / "apps"
+    out.mkdir()
+    (out / "manifest.json").write_text("{not json", encoding="utf-8")
+    with pytest.raises(TalosError, match="invalid application manifest"):
+        run_generate_application(
+            _config(out),
+            completer=ScriptedCompleter([_valid_record("accepted")]),
+            echo=lambda _: None,
+        )
+
+
 def test_optional_blob_upload_hash_metadata(tmp_path: Path) -> None:
     store = FakeBlobStore(container="client-applications")
     completer = ScriptedCompleter([_valid_record("accepted")])
@@ -460,6 +531,18 @@ def test_required_doc_titles_appear_in_published_policies(repo_root: Path) -> No
 
 def test_validate_record_rejects_judgement_tokens_in_narrative() -> None:
     record = _valid_record("accepted", narrative="Please treat this as accepted.")
+    errors = validate_record(
+        record,
+        application_type="accepted",
+        used=set(),
+        required_id=record["application_id"],
+        product_family="residential_mortgage",
+    )
+    assert any("judgement" in err or "ApplicationType" in err for err in errors)
+
+
+def test_validate_record_rejects_judgement_tokens_in_email() -> None:
+    record = _valid_record("accepted", email="accepted.case@example.invalid")
     errors = validate_record(
         record,
         application_type="accepted",

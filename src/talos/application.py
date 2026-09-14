@@ -369,10 +369,14 @@ def read_application_manifest(out: Path) -> dict[str, Any]:
         return {"documents": []}
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return {"documents": []}
+    except json.JSONDecodeError as exc:
+        raise TalosError(
+            f"invalid application manifest {path}: {exc}", exit_code=1
+        ) from exc
     if not isinstance(data, dict):
-        return {"documents": []}
+        raise TalosError(
+            f"application manifest {path} root must be a mapping", exit_code=1
+        )
     documents = data.get("documents")
     if not isinstance(documents, list):
         data = dict(data)
@@ -562,11 +566,12 @@ def validate_record(
     blob = json.dumps(record, ensure_ascii=False)
     if SSN_RE.search(blob) or NATIONAL_ID_RE.search(blob):
         errors.append("record looks like real national-id / SSN; use fictional values")
-    filing_text = " ".join(
-        str(record.get(field) or "")
-        for field in ("narrative", "product", "customer_name", "employer", "address")
-    )
-    if JUDGEMENT_LEAK_RE.search(filing_text):
+    scan = {
+        key: value
+        for key, value in record.items()
+        if key not in OPERATOR_RECORD_KEYS and key != "product_family"
+    }
+    if JUDGEMENT_LEAK_RE.search(json.dumps(scan, ensure_ascii=False)):
         errors.append(
             "filing fields must not contain ApplicationType or judgement labels"
         )
@@ -704,7 +709,13 @@ def write_applications(
 ) -> None:
     out.mkdir(parents=True, exist_ok=True)
     keep = {item.filename for item in rendered}
-    for name in stale_filenames or []:
+    for doc in manifest.get("documents") or []:
+        if isinstance(doc, dict) and doc.get("filename"):
+            keep.add(str(doc["filename"]))
+    candidates = {name for name in (stale_filenames or set())}
+    candidates.update(path.name for path in out.glob("credit-application-*.md"))
+    candidates.update(f"{kind}.md" for kind in APPLICATION_TYPES)
+    for name in sorted(candidates):
         if name in keep:
             continue
         path = out / name
@@ -822,7 +833,7 @@ def run_generate_application(
         product_family = assign_product_family(kind, used_families)
         used_families.add(product_family)
         attached, _omitted = attached_documents_for(kind, product_family)
-        record = _complete_one(
+        record, item = _complete_one(
             chat,
             user_template=user_template,
             system_prompt=system_prompt,
@@ -835,11 +846,10 @@ def run_generate_application(
             attached_documents=attached,
             used=used,
             echo=echo,
+            template_path=paths.template,
         )
         pending_records.append(record)
-        rendered.append(
-            render_application(record, paths.template, application_type=kind)
-        )
+        rendered.append(item)
         previous = existing.get(kind) or {}
         old_name = str(previous.get("_filename") or previous.get("filename") or "")
         if old_name:
@@ -872,7 +882,18 @@ def run_generate_application(
                 account_url=config.account_url,
                 credential=credential,
             )
-        _upload_applications(store, rendered, echo=echo)
+        keep_blobs = {
+            str(doc["filename"])
+            for doc in manifest.get("documents") or []
+            if isinstance(doc, dict) and doc.get("filename")
+        }
+        _upload_applications(
+            store,
+            rendered,
+            echo=echo,
+            keep_filenames=keep_blobs,
+            stale_filenames=stale_filenames,
+        )
 
     return rendered
 
@@ -891,7 +912,8 @@ def _complete_one(
     attached_documents: tuple[str, ...],
     used: set[str],
     echo: Echo,
-) -> dict[str, Any]:
+    template_path: Path,
+) -> tuple[dict[str, Any], RenderedApplication]:
     last_errors: list[str] = []
     product_label = PRODUCT_FAMILY_LABEL[product_family]
     for attempt in range(1, APPLICATION_LLM_ATTEMPTS + 1):
@@ -936,7 +958,12 @@ def _complete_one(
             errors = [str(exc)]
             record = {}
         if not errors:
-            return record
+            try:
+                return record, render_application(
+                    record, template_path, application_type=application_type
+                )
+            except TalosError as exc:
+                errors = [str(exc)]
         last_errors = errors
         echo(f"validation failed: {'; '.join(errors)}")
     raise TalosError(
@@ -950,6 +977,8 @@ def _upload_applications(
     rendered: list[RenderedApplication],
     *,
     echo: Echo,
+    keep_filenames: set[str],
+    stale_filenames: set[str] | None = None,
 ) -> None:
     try:
         store.ensure_container()
@@ -962,6 +991,14 @@ def _upload_applications(
             echo(
                 f"{item.record['application_id']}  {item.filename}  blob={url}  uploaded"
             )
+        extras = set(stale_filenames or ())
+        extras.update(store.list_markdown_names())
+        extras.update(f"{kind}.md" for kind in APPLICATION_TYPES)
+        for name in sorted(extras):
+            if name in keep_filenames or not name.endswith(".md"):
+                continue
+            store.delete_blob(name)
+            echo(f"{name}  blob deleted")
     except TalosError:
         raise
     except Exception as exc:

@@ -177,8 +177,13 @@ def citation_sources(text: str) -> list[str]:
     return _CITATION_GLYPH.findall(text)
 
 
+_LEGACY_APPLICATION_BLOBS = frozenset({"accepted.md", "rejected.md", "missing-data.md"})
+
+
 def assert_policy_only_citations(text: str) -> None:
     for source in citation_sources(text):
-        assert "credit-application-" not in source, source
-        if source.endswith(".md"):
-            assert source.startswith("CP-"), source
+        basename = source.rstrip("/").rsplit("/", 1)[-1]
+        assert not basename.startswith("credit-application-"), source
+        assert basename not in _LEGACY_APPLICATION_BLOBS, source
+        if basename.endswith(".md"):
+            assert basename.startswith("CP-"), source
