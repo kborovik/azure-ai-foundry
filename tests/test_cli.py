@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
+from talos import __version__
 from talos.cli import cli
 from talos.env import repo_root
 
@@ -125,7 +126,7 @@ def test_deploy_dry_run_prints_plan(clean_azure_env: None) -> None:
 def test_version_option() -> None:
     result = CliRunner().invoke(cli, ["--version"])
     assert result.exit_code == 0
-    assert "0.1.0" in result.output
+    assert __version__ in result.output
 
 
 def test_deploy_flags_override_env(
