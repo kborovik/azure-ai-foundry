@@ -55,9 +55,8 @@ rwildcard = $(strip \
 default: help
 
 .PHONY: help test check generate deploy infra infra-backend
-.PHONY: infra-create infra-plan infra-fmt infra-validate infra-show infra-destroy infra infra-init
+.PHONY: infra-create infra-plan infra-fmt infra-validate infra-show infra-status infra-destroy infra infra-init
 .PHONY: infra-backend-create infra-backend-show infra-backend-destroy infra-backend
-.PHONY: ai-account ai-project ai-agent ai-search ai-storage
 .PHONY: e2e clean preflight release major minor patch
 .PHONY: _release-pre _release-bump _release-tag _release-gh
 
@@ -177,74 +176,52 @@ infra-create: infra-validate ## terraform apply in infra/; write infra/outputs.j
 infra-show: ## Show workload terraform state (ENV=dev1|prd1)
 	terraform -chdir=infra show -no-color -var-file=$(ENV).tfvars | bat --language Terraform
 
-# Print "RG ACCOUNT PROJECT SEARCH STORAGE ENDPOINT" from infra/outputs.json
+# Print "RG ACCOUNT STORAGE ENDPOINT" from infra/outputs.json
 # (terraform output -json shape).
-ai-ids = jq -r '[.AZURE_RESOURCE_GROUP.value, (.AZURE_AI_PROJECT_RESOURCE_ID.value | split("/") | .[index("accounts") + 1]), (.AZURE_AI_PROJECT_RESOURCE_ID.value | split("/") | .[index("projects") + 1]), (.AZURE_SEARCH_ENDPOINT.value | split("/")[-1] | split(".")[0]), (.AZURE_STORAGE_ACCOUNT_URL.value | split("/")[-1] | split(".")[0]), .AZURE_AI_PROJECT_ENDPOINT.value] | join(" ")' infra/outputs.json
+infra-ids = jq -r '[.AZURE_RESOURCE_GROUP.value, (.AZURE_AI_PROJECT_RESOURCE_ID.value | split("/") | .[index("accounts") + 1]), (.AZURE_STORAGE_ACCOUNT_URL.value | split("/")[-1] | split(".")[0]), .AZURE_AI_PROJECT_ENDPOINT.value] | join(" ")' infra/outputs.json
 
-define ai-pre
+infra-status: ## Concise live Azure resource status
 	$(call need-az)
 	$(call need-az-auth)
 	$(call need-jq)
-	$(call header,$1)
+	$(call header,Infra status)
 	test -f infra/outputs.json || { echo "missing infra/outputs.json — run: gmake infra-create" >&2; exit 1; }
-endef
-
-ai-account: ## Show Foundry account and model deployments
-	$(call ai-pre,Foundry Account)
-	$(ai-ids) | { \
-		read rg account project search storage endpoint; \
-		[ -n "$$account" ] || exit 1; \
-		az cognitiveservices account show --name $$account --resource-group $$rg \
-			--query "{name:name,kind:kind,sku:sku.name,state:properties.provisioningState,endpoint:properties.endpoint}" -o table; \
-		printf '%s\n' "$(blue)==> Foundry Deployments <==$(reset)"; \
-		az cognitiveservices account deployment list --name $$account --resource-group $$rg \
-			--query "[].{name:name,model:properties.model.name,version:properties.model.version,state:properties.provisioningState}" -o table; \
-	}
-
-ai-project: ## Show Foundry project
-	$(call ai-pre,Foundry project)
-	$(ai-ids) | { \
-		read rg account project search storage endpoint; \
-		[ -n "$$account" ] && [ -n "$$project" ] || exit 1; \
-		az cognitiveservices account project show --name $$account --resource-group $$rg --project-name $$project \
-			--query "{name:name,state:properties.provisioningState}" -o table; \
-	}
-
-ai-agent: ## Show Foundry prompt agent
-	$(call ai-pre,Foundry agent)
-	$(ai-ids) | { \
-		read rg account project search storage endpoint; \
-		[ -n "$$endpoint" ] || exit 1; \
-		az rest --method get \
-			--url "$$endpoint/agents/credit-policy-agent?api-version=v1" \
-			--resource https://ai.azure.com \
-			--query "{name:name,clientId:instance_identity.client_id}" -o table; \
-	}
-
-ai-search: ## Show Azure AI Search service
-	$(call ai-pre,Azure AI Search)
-	$(ai-ids) | { \
-		read rg account project search storage endpoint; \
-		[ -n "$$search" ] || exit 1; \
-		az search service show --name $$search --resource-group $$rg \
-			--query "{name:name,sku:sku.name,status:status,semantic:semanticSearch}" -o table; \
-	}
-
-ai-storage: ## Show Storage account, containers, and blobs
-	$(call ai-pre,Storage)
-	$(ai-ids) | { \
-		read rg account project search storage endpoint; \
-		[ -n "$$storage" ] || exit 1; \
-		az storage account show --name $$storage --resource-group $$rg \
-			--query "{name:name,kind:kind,sku:sku.name,https:enableHttpsTrafficOnly,tls:minimumTlsVersion}" -o table; \
-		printf '%s\n' "$(blue)==> Containers <==$(reset)"; \
-		az storage container list --account-name $$storage --auth-mode login \
-			--query "[].{name:name}" -o table; \
-		for c in $$(az storage container list --account-name $$storage --auth-mode login --query "[].name" -o tsv); do \
-			printf '%s\n' "$(blue)==> $$c <==$(reset)"; \
-			az storage blob list --account-name $$storage --container-name $$c --auth-mode login \
-				--query "[].{name:name,bytes:properties.contentLength,modified:properties.lastModified}" -o table; \
-		done; \
+	$(infra-ids) | { \
+		read rg account storage endpoint; \
+		[ -n "$$rg" ] || exit 1; \
+		tab=$$(printf '\t'); \
+		{ \
+			printf 'NAME%sKIND%sSTATE%sDETAIL\n' "$$tab" "$$tab" "$$tab"; \
+			st=$$(az group show --name $$rg --query properties.provisioningState -o tsv 2>/dev/null) || st=missing; \
+			printf '%s%srg%s%s%s\n' "$$rg" "$$tab" "$$tab" "$$st" "$$tab"; \
+			{ az resource list --resource-group $$rg -o json 2>/dev/null || echo '[]'; } \
+			| jq -r --arg t "$$tab" '.[] | [.name, (.type|split("/")|last), (.provisioningState // "-"), ""] | join($$t)'; \
+			if [ -n "$$account" ]; then \
+				az cognitiveservices account deployment list --name $$account --resource-group $$rg \
+					--query "[].[name, properties.provisioningState, properties.model.name, properties.model.version, sku.name, sku.capacity]" -o tsv 2>/dev/null \
+				| while IFS="$$tab" read n st m v sku cap; do \
+					printf '%s%sdeployment%s%s%s%s %s %s cap=%s\n' "$$n" "$$tab" "$$tab" "$$st" "$$tab" "$$m" "$$v" "$$sku" "$$cap"; \
+				done; \
+			fi; \
+			if [ -n "$$endpoint" ]; then \
+				agent=$$(az rest --method get \
+					--url "$$endpoint/agents/credit-policy-agent?api-version=v1" \
+					--resource https://ai.azure.com \
+					--query "[name, instance_identity.client_id]" -o tsv 2>/dev/null) || agent=; \
+				if [ -n "$$agent" ]; then \
+					set -- $$agent; \
+					printf '%s%sagent%sok%s%s\n' "$$1" "$$tab" "$$tab" "$$tab" "$$2"; \
+				else \
+					printf 'credit-policy-agent%sagent%smissing%s\n' "$$tab" "$$tab" "$$tab"; \
+				fi; \
+			fi; \
+			if [ -n "$$storage" ]; then \
+				for c in $$(az storage container list --account-name $$storage --auth-mode login --query "[].name" -o tsv 2>/dev/null); do \
+					n=$$(az storage blob list --account-name $$storage --container-name $$c --auth-mode login --query "length(@)" -o tsv 2>/dev/null) || n=?; \
+					printf '%s%scontainer%sok%s%s blobs\n' "$$c" "$$tab" "$$tab" "$$tab" "$$n"; \
+				done; \
+			fi; \
+		} | column -t -s "$$tab"; \
 	}
 
 infra:
@@ -353,8 +330,6 @@ pad-infra-fmt := infra-fmt$(space)
 pad-preflight := preflight$(space)
 pad-release := release$(space)$(space)$(space)
 pad-e2e := e2e$(space)$(space)$(space)$(space)$(space)$(space)$(space)
-pad-ai-agent := ai-agent$(space)$(space)
-pad-ai-search := ai-search$(space)
 pad10 = $(or $(pad-$1),$1)
 show-help = $(let tgt desc,$(subst $(s)##$(s), ,$1),$(let name text,$(patsubst %:,%,$(firstword $(subst $(s),$(space),$(tgt)))) $(strip $(subst $(s),$(space),$(desc))),$(info   $(yellow)$(call pad10,$(name))$(reset) $(text))))
 

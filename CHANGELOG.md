@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- **`gmake infra-status`:** one concise live Azure status report (RG, ARM resources, Foundry deployments, prompt agent, blob counts per container). Replaces `ai-account` / `ai-project` / `ai-agent` / `ai-search` / `ai-storage`. Names from `infra/outputs.json` via `jq`. Does not spawn `terraform output`.
+
 ## [v0.2.1] - 2026-09-14
 
 ### Fixed
