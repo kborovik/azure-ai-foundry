@@ -190,12 +190,13 @@ define ai-pre
 endef
 
 ai-account: ## Show Foundry account and model deployments
-	$(call ai-pre,Foundry account)
+	$(call ai-pre,Foundry Account)
 	$(ai-ids) | { \
 		read rg account project search storage endpoint; \
 		[ -n "$$account" ] || exit 1; \
 		az cognitiveservices account show --name $$account --resource-group $$rg \
 			--query "{name:name,kind:kind,sku:sku.name,state:properties.provisioningState,endpoint:properties.endpoint}" -o table; \
+		printf '%s\n' "$(blue)==> Foundry Deployments <==$(reset)"; \
 		az cognitiveservices account deployment list --name $$account --resource-group $$rg \
 			--query "[].{name:name,model:properties.model.name,version:properties.model.version,state:properties.provisioningState}" -o table; \
 	}
