@@ -14,6 +14,7 @@ from talos.provision import (
     resource_id_connection_string,
     run_deploy,
     synchronization_counts,
+    synchronization_in_progress,
 )
 from tests.fakes import FakeAgents, FakeBlobStore, FakeClock, FakeRest, json_response
 
@@ -119,7 +120,7 @@ def _script_index_count(
     )
 
 
-def _script_app_source(rest: FakeRest, *, run: bool = True) -> None:
+def _script_app_source(rest: FakeRest, *, run: bool = True, wait: bool = False) -> None:
     rest.expect(
         "PUT", "/knowledgesources/ks-client-applications", json_response(201, {})
     )
@@ -129,6 +130,12 @@ def _script_app_source(rest: FakeRest, *, run: bool = True) -> None:
         json_response(200, _ks_get_body("ks-client-applications-indexer")),
     )
     if run:
+        if wait:
+            rest.expect(
+                "GET",
+                "/knowledgesources/ks-client-applications/status",
+                json_response(200, {}),
+            )
         rest.expect(
             "POST",
             "/indexers/ks-client-applications-indexer/run",
@@ -157,6 +164,12 @@ def _script_source(
             },
         ),
     )
+    if wait:
+        rest.expect(
+            "GET",
+            f"/knowledgesources/{name}/status",
+            json_response(200, {}),
+        )
     rest.expect("POST", f"/indexers/{indexer}/run", json_response(202, None))
     if wait:
         rest.expect(
@@ -204,11 +217,16 @@ def _script_happy_path(
     return rest
 
 
-def _done_status(*, processed: int, failed: int) -> dict:
+def _done_status(
+    *,
+    processed: int,
+    failed: int,
+    end_time: str = "2026-09-12T18:00:00Z",
+) -> dict:
     return {
         "kind": "azureBlob",
         "lastSynchronizationState": {
-            "endTime": "2026-09-12T18:00:00Z",
+            "endTime": end_time,
             "itemUpdatesProcessed": processed,
             "itemsUpdatesFailed": failed,
         },
@@ -263,6 +281,19 @@ def test_synchronization_counts_read_both_item_spellings() -> None:
     assert end is not None
     assert processed == 12
     assert failed == 0
+
+
+def test_synchronization_in_progress() -> None:
+    assert synchronization_in_progress(
+        {"currentSynchronizationState": {"itemUpdatesProcessed": 1}}
+    )
+    assert not synchronization_in_progress(
+        {
+            "lastSynchronizationState": {"endTime": "2026-09-12T18:00:00Z"},
+            "currentSynchronizationState": {"endTime": "2026-09-12T18:01:00Z"},
+        }
+    )
+    assert not synchronization_in_progress({})
 
 
 def test_activity_protocol_enabled() -> None:
@@ -459,9 +490,14 @@ def test_wait_times_out_when_end_time_never_arrives(tmp_path: Path) -> None:
         json_response(200, _ks_get_body()),
     )
     rest.expect(
+        "GET",
+        "/knowledgesources/ks-credit-policies/status",
+        json_response(200, {}),
+    )
+    rest.expect(
         "POST", "/indexers/ks-credit-policies-indexer/run", json_response(202, None)
     )
-    _script_app_source(rest)
+    _script_app_source(rest, wait=True)
     pending = json_response(
         200, {"currentSynchronizationState": {"itemUpdatesProcessed": 1}}
     )
@@ -480,6 +516,103 @@ def test_wait_times_out_when_end_time_never_arrives(tmp_path: Path) -> None:
             clock=FakeClock(),
             echo=lambda _: None,
         )
+
+
+def test_wait_polls_until_indexer_end_time_changes(tmp_path: Path) -> None:
+    stale = _done_status(processed=0, failed=0, end_time="2026-09-14T14:58:12.337Z")
+    fresh_policy = _done_status(
+        processed=12, failed=0, end_time="2026-09-14T16:01:29.841Z"
+    )
+    fresh_app = _done_status(processed=3, failed=0, end_time="2026-09-14T16:02:00Z")
+    rest = FakeRest()
+    rest.expect("PUT", "/knowledgesources/ks-credit-policies", json_response(201, {}))
+    rest.expect(
+        "GET",
+        "/knowledgesources/ks-credit-policies?",
+        json_response(200, _ks_get_body()),
+    )
+    rest.expect(
+        "GET",
+        "/knowledgesources/ks-credit-policies/status",
+        json_response(200, stale),
+    )
+    rest.expect(
+        "POST", "/indexers/ks-credit-policies-indexer/run", json_response(202, None)
+    )
+    rest.expect(
+        "PUT", "/knowledgesources/ks-client-applications", json_response(201, {})
+    )
+    rest.expect(
+        "GET",
+        "/knowledgesources/ks-client-applications?",
+        json_response(200, _ks_get_body("ks-client-applications-indexer")),
+    )
+    rest.expect(
+        "GET",
+        "/knowledgesources/ks-client-applications/status",
+        json_response(200, stale),
+    )
+    rest.expect(
+        "POST",
+        "/indexers/ks-client-applications-indexer/run",
+        json_response(202, None),
+    )
+    rest.expect(
+        "GET",
+        "/knowledgesources/ks-credit-policies/status",
+        json_response(200, fresh_policy),
+    )
+    rest.expect(
+        "GET",
+        "/knowledgesources/ks-client-applications/status",
+        json_response(200, stale),
+    )
+    rest.expect(
+        "GET",
+        "/knowledgesources/ks-client-applications/status",
+        json_response(200, fresh_app),
+    )
+    rest.expect("PUT", "/knowledgebases/kb-credit-policies", json_response(201, {}))
+    rest.expect("PUT", "/connections/conn-kb-credit-policies", json_response(200, {}))
+    do_deploy(
+        _config(tmp_path, wait=True),
+        rest=rest,
+        agents=FakeAgents(),
+        clock=FakeClock(),
+        echo=lambda _: None,
+    )
+
+
+def test_wait_polls_while_current_synchronization_in_progress(tmp_path: Path) -> None:
+    in_progress = {
+        "lastSynchronizationState": {
+            "endTime": "2026-09-14T14:58:12.337Z",
+            "itemUpdatesProcessed": 0,
+            "itemsUpdatesFailed": 0,
+        },
+        "currentSynchronizationState": {"itemUpdatesProcessed": 2},
+    }
+    rest = _script_happy_path(
+        FakeRest(),
+        wait=True,
+        indexer_status=in_progress,
+        application_status=_done_status(processed=3, failed=0),
+    )
+    rest.expect(
+        "GET",
+        "/knowledgesources/ks-credit-policies/status",
+        json_response(
+            200,
+            _done_status(processed=12, failed=0, end_time="2026-09-14T16:01:29.841Z"),
+        ),
+    )
+    do_deploy(
+        _config(tmp_path, wait=True),
+        rest=rest,
+        agents=FakeAgents(),
+        clock=FakeClock(),
+        echo=lambda _: None,
+    )
 
 
 def test_skip_endpoint_patch_when_activity_enabled(tmp_path: Path) -> None:

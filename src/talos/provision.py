@@ -346,6 +346,13 @@ def synchronization_counts(status: dict[str, Any]) -> tuple[str | None, int, int
     return (str(end_time) if end_time else None), processed, failed
 
 
+def synchronization_in_progress(status: dict[str, Any]) -> bool:
+    current = status.get("currentSynchronizationState")
+    if not isinstance(current, dict) or not current:
+        return False
+    return not current.get("endTime")
+
+
 def activity_protocol_enabled(agent: dict[str, Any]) -> bool:
     endpoint = agent.get("agent_endpoint") or {}
     protocol_configuration = endpoint.get("protocol_configuration") or {}
@@ -394,6 +401,7 @@ def run_deploy(
 
     _sync_corpora(config, sources, blob_stores, cred, echo)
 
+    previous_end_times: dict[str, str | None] = {}
     for source in sources:
         echo(f"creating or updating knowledge source '{source.name}'")
         _put_knowledge_source(config, source, rest_client, echo)
@@ -402,6 +410,11 @@ def run_deploy(
         if config.skip_indexer_run:
             echo(f"skipping indexer run for '{source.name}'")
         else:
+            if config.wait:
+                end_time, _, _ = synchronization_counts(
+                    _sync_status(config, source, rest_client)
+                )
+                previous_end_times[source.name] = end_time
             echo(f"running indexer '{indexer_name}'")
             _run_indexer(config, rest_client, indexer_name)
 
@@ -409,7 +422,15 @@ def run_deploy(
         deadline = clock.monotonic() + config.wait_timeout_seconds
         for source in sources:
             echo(f"waiting for knowledge source '{source.name}' to finish indexing")
-            _wait_for_sync(config, source, rest_client, clock, echo, deadline=deadline)
+            _wait_for_sync(
+                config,
+                source,
+                rest_client,
+                clock,
+                echo,
+                deadline=deadline,
+                previous_end_time=previous_end_times.get(source.name),
+            )
     else:
         echo("not waiting for indexer (pass --wait to poll)")
 
@@ -595,6 +616,15 @@ def _assert_local_wait_ready(
             )
 
 
+def _sync_status(
+    config: DeployConfig, source: BlobKnowledgeSource, rest: RestClient
+) -> dict[str, Any]:
+    url = _search_url(config, f"knowledgesources/{quote(source.name, safe='')}/status")
+    response = rest.request("GET", url, scope=SEARCH_SCOPE)
+    raise_for_status(response, f"GET knowledge source '{source.name}' status")
+    return response.json if isinstance(response.json, dict) else {}
+
+
 def _wait_for_sync(
     config: DeployConfig,
     source: BlobKnowledgeSource,
@@ -603,20 +633,29 @@ def _wait_for_sync(
     echo: Echo,
     *,
     deadline: float | None = None,
+    previous_end_time: str | None = None,
 ) -> None:
-    url = _search_url(config, f"knowledgesources/{quote(source.name, safe='')}/status")
     if deadline is None:
         deadline = clock.monotonic() + config.wait_timeout_seconds
     while True:
-        response = rest.request("GET", url, scope=SEARCH_SCOPE)
-        raise_for_status(response, f"GET knowledge source '{source.name}' status")
-        status = response.json if isinstance(response.json, dict) else {}
+        status = _sync_status(config, source, rest)
         end_time, processed, failed = synchronization_counts(status)
         echo(
             f"{source.name} indexer status: processed={processed} failed={failed} "
             f"endTime={end_time or 'pending'}"
         )
         _echo_status_errors(status, echo)
+        awaiting_new_run = synchronization_in_progress(status) or (
+            previous_end_time is not None and end_time == previous_end_time
+        )
+        if awaiting_new_run:
+            if clock.monotonic() >= deadline:
+                raise TalosError(
+                    f"timed out waiting for knowledge source '{source.name}' "
+                    f"after {int(config.wait_timeout_seconds)}s"
+                )
+            clock.sleep(config.poll_interval_seconds)
+            continue
         if end_time:
             if failed:
                 raise TalosError(
