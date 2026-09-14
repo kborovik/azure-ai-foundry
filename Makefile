@@ -61,14 +61,19 @@ default: help
 .PHONY: _release-pre _release-bump _release-tag _release-gh
 
 ###############################################################################
-# Tests and local loop
+# Local
 ###############################################################################
 
+##@ Local:
 check: .venv ## Check Python code
 	$(call header,Checking)
 	$(UV) run ruff format --check
 	$(UV) run ruff check
 	$(UV) run pytest
+
+generate: .venv ## Generate Client Applications
+	$(call header,Generating client applications)
+	$(UV) run talos generate application --all
 
 deploy: .venv infra-create ## Provision Foundry IQ + agent
 	$(call need-terraform)
@@ -83,6 +88,26 @@ preflight: .venv
 	az account show --query name -o tsv
 	terraform version
 
+# `gmake e2e FILE=<path-or-stem>` scopes to one test file; unset = live markers.
+e2e_target := $(if $(FILE),$(firstword $(wildcard $(FILE) tests/$(FILE) tests/$(FILE).py)),)
+ifneq ($(filter e2e,$(MAKECMDGOALS)),)
+$(if $(FILE),$(if $(e2e_target),,$(error no test file matches FILE=$(FILE))))
+endif
+
+e2e: check preflight ## Live pytest vs terraform outputs (ingestion / retrieval / agent)
+	$(call header,Live e2e)
+	$(UV) run pytest -m "ingestion or retrieval or agent" --override-ini addopts= $(e2e_target)
+
+clean: ## Remove caches, build artifacts, and bytecode
+	$(call header,Cleaning)
+	rm -rf .ruff_cache .pytest_cache dist build src/talos.egg-info *.egg-info $(call rwildcard,,__pycache__)
+	rm -f .release-notes $(call rwildcard,,*.pyc) $(call rwildcard,,.DS_Store)
+
+###############################################################################
+# Infrastructure
+###############################################################################
+
+##@ Infrastructure:
 infra-backend-create:
 	$(call need-az)
 	$(call need-az-auth)
@@ -220,24 +245,11 @@ infra-destroy: infra-init ## terraform destroy workload stack; drop infra/output
 		-var-file=$(ENV).tfvars
 	rm -f infra/outputs.json
 
-# `gmake e2e FILE=<path-or-stem>` scopes to one test file; unset = live markers.
-e2e_target := $(if $(FILE),$(firstword $(wildcard $(FILE) tests/$(FILE) tests/$(FILE).py)),)
-ifneq ($(filter e2e,$(MAKECMDGOALS)),)
-$(if $(FILE),$(if $(e2e_target),,$(error no test file matches FILE=$(FILE))))
-endif
-
-e2e: check preflight ## Live pytest vs terraform outputs (ingestion / retrieval / agent)
-	$(call header,Live e2e)
-	$(UV) run pytest -m "ingestion or retrieval or agent" --override-ini addopts= $(e2e_target)
-
-clean: ## Remove caches, build artifacts, and bytecode
-	$(call header,Cleaning)
-	rm -rf .ruff_cache .pytest_cache dist build src/talos.egg-info *.egg-info $(call rwildcard,,__pycache__)
-	rm -f .release-notes $(call rwildcard,,*.pyc) $(call rwildcard,,.DS_Store)
-
 ###############################################################################
 # Release
 ###############################################################################
+
+##@ Release:
 
 # `gmake release <part>` passes the part as an extra goal; pick it out and
 # give the part words no-op recipes so make does not try to build them.
@@ -302,23 +314,17 @@ uv.lock: pyproject.toml
 # Help
 ###############################################################################
 
-# Target-line double-hash descriptions, read with $(file) and split with $(let).
+# Target-line double-hash descriptions and ##@ section headers, read with $(file).
+# Spaces become RS so each physical line is one word; source order is kept.
 help-src := $(file < $(firstword $(MAKEFILE_LIST)))
-help-words := $(foreach w,$(subst $(space),$(s),$(help-src)),$(if $(and $(findstring $(s)##$(s),$(w)),$(filter-out \#%,$(w))),$(w)))
-pad-check := check$(space)$(space)$(space)$(space)$(space)
-pad-clean := clean$(space)$(space)$(space)$(space)$(space)
-pad-test := test$(space)$(space)$(space)$(space)$(space)$(space)
-pad-deploy := deploy$(space)$(space)$(space)$(space)
-pad-generate := generate$(space)$(space)
-pad-infra-fmt := infra-fmt$(space)
-pad-preflight := preflight$(space)
-pad-release := release$(space)$(space)$(space)
-pad-e2e := e2e$(space)$(space)$(space)$(space)$(space)$(space)$(space)
-pad10 = $(or $(pad-$1),$1)
-show-help = $(let tgt desc,$(subst $(s)##$(s), ,$1),$(let name text,$(patsubst %:,%,$(firstword $(subst $(s),$(space),$(tgt)))) $(strip $(subst $(s),$(space),$(desc))),$(info   $(yellow)$(call pad10,$(name))$(reset) $(text))))
+help-words := $(foreach w,$(subst $(space),$(s),$(help-src)),$(if $(or $(and $(findstring $(s)##$(s),$(w)),$(filter-out #%,$(w))),$(filter ##@%,$(w))),$(w)))
+help-name = $(let tgt desc,$(subst $(s)##$(s), ,$1),$(patsubst %:,%,$(firstword $(subst $(s),$(space),$(tgt)))))
+help-text = $(let tgt desc,$(subst $(s)##$(s), ,$1),$(strip $(subst $(s),$(space),$(desc))))
+help-names := $(foreach w,$(help-words),$(if $(filter ##@%,$(w)),,$(call help-name,$(w))))
+help-width := $(shell printf '%s\n' $(help-names) | awk '{ if (length > m) m = length } END { printf "%s", m }')
+show-help = $(if $(filter ##@%,$1),$(info )$(info $(blue)$(strip $(subst $(s),$(space),$(patsubst ##@%,%,$1)))$(reset)),$(let name,$(call help-name,$1),$(info $(space)$(space)$(yellow)$(shell printf '%-*s' $(help-width) '$(name)')$(reset)  $(call help-text,$1))))
 
 help:
 	$(info $(blue)Usage: $(green)gmake [recipe]$(reset))
-	$(info $(blue)Recipes:$(reset))
-	$(foreach w,$(sort $(help-words)),$(call show-help,$(w)))
+	$(foreach w,$(help-words),$(call show-help,$(w)))
 	:
