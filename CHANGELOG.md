@@ -4,6 +4,7 @@
 
 ### Changed
 
+- **Live agent tests:** each `invoke_agent` call prints `Agent Request` (user prompt) then `Agent Response` (extracted reply) to stdout so a human can evaluate the flow. Visible under `gmake e2e` (`-s` already on).
 - **`gmake e2e`:** runs `check`, Azure preflight, `infra-create`, `generate` (`talos generate application --all`), and `deploy` (`talos deploy --wait`) before live pytest. Live pytest is `-v -ra -s --durations=0` so each test name, skip reason, stdout, and duration print instead of a compact `...F` line. One target is the full live chain; `FILE=` still scopes the pytest file.
 - **`gmake infra-status`:** one concise live Azure status report (RG, ARM resources, Foundry deployments, prompt agent, blob counts per container). Replaces `ai-account` / `ai-project` / `ai-agent` / `ai-search` / `ai-storage`. Names from `infra/outputs.json` via `jq`. Does not spawn `terraform output`.
 

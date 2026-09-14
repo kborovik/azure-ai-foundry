@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from typing import Any
 
 import pytest
@@ -102,9 +103,15 @@ def invoke_agent(env: dict[str, str], user_text: str) -> str:
     )
     payload = response.json if isinstance(response.json, dict) else {}
     text = _response_output_text(payload)
+    print_agent_turn(user_text, text)
     if not text.strip():
         pytest.skip("agent responses returned empty text")
     return text
+
+
+def print_agent_turn(request: str, response: str) -> None:
+    sys.stdout.write(f"\nAgent Request\n{request}\n\nAgent Response\n{response}\n")
+    sys.stdout.flush()
 
 
 def _response_output_text(payload: dict[str, Any]) -> str:
