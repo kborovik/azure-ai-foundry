@@ -100,7 +100,7 @@ T22|x|swap terraform `local.resource_token` md5(subscription-env-location) → l
 T23|x|drop terraform variables not in tfvars (`principal_id`, `chat_capacity`, `embedding_capacity`, `project_name`, `chat_deployment_name`, `embedding_deployment_name`) → locals/literals|V29,I.infra
 T24|x|swap application generate+fixtures+instructions → opaque `CA-YYYY-NNNNNN`, customer filing + attached-docs list, file `credit-application-{application_id}.md`, mixed products, intended_outcome in manifest only, EvaluationMode compare docs + emit judgement, ! infer outcome from id or filename|V1,V2,V5,V27,V31,V32,I.cmd,I.file,I.agent
 T25|x|swap application generate+fixtures: MD opens `# Credit application {application_id}`; drop watermark line + YAML prefix|V2,V32,I.file
-T26|.|swap application serials: unique `CA-{YYYYMMDD}-{unix_ms}` SerialAllocator bump-ms; `--count N` (`--type` N files, `--all` 3N); `--force --application-id` keep serial; `--force` w/o id or w/ `--count` usage error; two generates ! share id unless force-named; manifest keyed by `application_id` lockstep filename ! colon; wait-gate application processed ≥ local corpus size; unit fixtures+instructions new-format ids|V5,V24,V31,V32,I.cmd,I.file,I.agent
+T26|x|swap application serials: unique `CA-{YYYYMMDD}-{unix_ms}` SerialAllocator bump-ms; `--count N` (`--type` N files, `--all` 3N); `--force --application-id` keep serial; `--force` w/o id or w/ `--count` usage error; two generates ! share id unless force-named; manifest keyed by `application_id` lockstep filename ! colon; wait-gate application processed ≥ local corpus size; unit fixtures+instructions new-format ids|V5,V24,V31,V32,I.cmd,I.file,I.agent
 
 ## §B BUGS
 

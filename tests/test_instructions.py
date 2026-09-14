@@ -30,7 +30,7 @@ def test_instructions_contain_evaluation_mode() -> None:
     )
     assert WATERMARK.split("—")[0].strip() in text or "SYNTHETIC" in text
     assert "type nicknames" in text.lower() or "`accepted`" in text
-    assert "CA-YYYY-NNNNNN" in text
+    assert "CA-{YYYYMMDD}-{unix_ms}" in text
     assert "CP-DOC-2026-01" in text
     assert "attached" in text.lower()
     assert "required-document" in text.lower() or "required document" in text.lower()

@@ -79,7 +79,7 @@ generate: .venv ## Render corpus locally
 	$(call header,Generating credit policies)
 	$(UV) run talos generate policy --local-only
 	$(call header,Generating client applications)
-	$(UV) run talos generate application --all --force --local-only
+	$(UV) run talos generate application --all --local-only
 
 deploy: .venv infra-create ## Provision Foundry IQ + agent
 	$(call need-terraform)

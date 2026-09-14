@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -9,7 +10,7 @@ from click.testing import CliRunner
 
 from talos.application import (
     ApplicationGenerateConfig,
-    allocate_application_id,
+    SerialAllocator,
     application_filename,
     attached_documents_for,
     contains_forbidden_outcome_token,
@@ -40,6 +41,13 @@ pytestmark = pytest.mark.unit
 
 FACTS = repo_root() / "corpus/facts.yaml"
 FIXTURES = repo_root() / "tests/fixtures/client-applications"
+FROZEN_NOW = datetime(2026, 9, 14, tzinfo=timezone.utc)
+FROZEN_SERIAL = "CA-20260914-1789344000000"
+SAMPLE_SERIAL = "CA-20260115-1768478400000"
+
+
+def _frozen_clock() -> datetime:
+    return FROZEN_NOW
 
 
 class ScriptedCompleter:
@@ -65,7 +73,7 @@ def _valid_record(kind: str, **overrides: object) -> dict:
     }
     customer_name, customer_id, email = names[kind]
     record: dict = {
-        "application_id": "CA-2026-000001",
+        "application_id": SAMPLE_SERIAL,
         "customer_name": customer_name,
         "customer_id": customer_id,
         "email": email,
@@ -104,6 +112,16 @@ def _valid_record(kind: str, **overrides: object) -> dict:
     return record
 
 
+def _unique_record(kind: str, index: int, **overrides: object) -> dict:
+    values: dict[str, object] = {
+        "customer_name": f"Pat Case {index}",
+        "customer_id": f"SYN-{index:06d}",
+        "email": f"pat.case.{index}@example.invalid",
+    }
+    values.update(overrides)
+    return _valid_record(kind, **values)
+
+
 def _config(out: Path, **overrides: object) -> ApplicationGenerateConfig:
     values: dict[str, object] = dict(
         out=out,
@@ -120,7 +138,15 @@ def _config(out: Path, **overrides: object) -> ApplicationGenerateConfig:
 def test_application_help_documents_flags() -> None:
     result = CliRunner().invoke(cli, ["generate", "application", "--help"])
     assert result.exit_code == 0
-    for flag in ("--type", "--all", "--force", "--local-only", "--dry-run"):
+    for flag in (
+        "--type",
+        "--all",
+        "--count",
+        "--force",
+        "--application-id",
+        "--local-only",
+        "--dry-run",
+    ):
         assert flag in result.output
     assert "knowledge source" in result.output.lower() or "PUT" in result.output
     assert "operator" in result.output.lower()
@@ -141,6 +167,7 @@ def test_application_dry_run_does_not_call_llm_or_write(tmp_path: Path) -> None:
         _config(out, dry_run=True),
         completer=completer,
         echo=lambda _: None,
+        clock=_frozen_clock,
     )
     assert rendered == []
     assert completer.calls == []
@@ -172,14 +199,20 @@ def test_generate_one_slot_writes_opaque_customer_filing(tmp_path: Path) -> None
     out = tmp_path / "apps"
     completer = ScriptedCompleter([_valid_record("accepted")])
     rendered = run_generate_application(
-        _config(out), completer=completer, echo=lambda _: None
+        _config(out),
+        completer=completer,
+        echo=lambda _: None,
+        clock=_frozen_clock,
     )
     assert len(rendered) == 1
     application_id = rendered[0].record["application_id"]
+    assert application_id == FROZEN_SERIAL
     assert re.fullmatch(APPLICATION_ID_RE, application_id)
     assert not contains_forbidden_outcome_token(application_id)
+    assert ":" not in application_id
     filename = application_filename(application_id)
     assert filename == f"credit-application-{application_id}.md"
+    assert ":" not in filename
     path = out / filename
     text = path.read_text(encoding="utf-8")
     assert first_visible_line(text) == credit_application_heading(application_id)
@@ -215,9 +248,13 @@ def test_generate_one_slot_writes_opaque_customer_filing(tmp_path: Path) -> None
     )
     manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["container"] == "client-applications"
-    assert manifest["documents"][0]["intended_outcome"] == "accepted"
-    assert manifest["documents"][0]["slot"] == "accepted"
-    assert manifest["documents"][0]["filename"] == filename
+    documents = manifest["documents"]
+    assert isinstance(documents, dict)
+    row = documents[application_id]
+    assert row["intended_outcome"] == "accepted"
+    assert row["filename"] == filename
+    assert row["application_id"] == application_id
+    assert "slot" not in row
     assert not (out / "accepted.md").exists()
     extras = [p for p in out.iterdir() if p.suffix not in {".md", ".json"}]
     assert extras == []
@@ -238,6 +275,7 @@ def test_generate_all_writes_three_unique_identities_and_products(
         _config(out, types=APPLICATION_TYPES),
         completer=completer,
         echo=lambda _: None,
+        clock=_frozen_clock,
     )
     assert len(rendered) == 3
     names = {item.record["customer_name"] for item in rendered}
@@ -250,14 +288,18 @@ def test_generate_all_writes_three_unique_identities_and_products(
     assert len(families) == 3
     assert families <= set(PRODUCT_FAMILIES)
     manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
-    slots = {doc["slot"] for doc in manifest["documents"]}
-    assert slots == set(APPLICATION_TYPES)
-    for doc in manifest["documents"]:
+    documents = manifest["documents"]
+    assert isinstance(documents, dict)
+    outcomes = {doc["intended_outcome"] for doc in documents.values()}
+    assert outcomes == set(APPLICATION_TYPES)
+    for application_id, doc in documents.items():
+        assert application_id == doc["application_id"]
         assert re.fullmatch(APPLICATION_ID_RE, doc["application_id"])
         assert not contains_forbidden_outcome_token(doc["application_id"])
+        assert ":" not in doc["application_id"]
         assert doc["filename"] == f"credit-application-{doc['application_id']}.md"
+        assert ":" not in doc["filename"]
         assert (out / doc["filename"]).is_file()
-        assert doc["intended_outcome"] == doc["slot"]
         text = (out / doc["filename"]).read_text(encoding="utf-8")
         assert "intended_outcome" not in text
         assert "application_type" not in text
@@ -279,6 +321,7 @@ def test_attached_docs_complete_or_omitted_by_slot(tmp_path: Path) -> None:
         _config(out, types=APPLICATION_TYPES),
         completer=completer,
         echo=lambda _: None,
+        clock=_frozen_clock,
     )
     by_slot = {item.application_type: item for item in rendered}
     for kind in ("accepted", "rejected"):
@@ -295,32 +338,28 @@ def test_attached_docs_complete_or_omitted_by_slot(tmp_path: Path) -> None:
     assert required - attached
 
 
-def test_existing_slot_requires_force(tmp_path: Path) -> None:
+def test_second_generate_appends_distinct_serial(tmp_path: Path) -> None:
     out = tmp_path / "apps"
-    completer = ScriptedCompleter([_valid_record("accepted")])
     first = run_generate_application(
-        _config(out), completer=completer, echo=lambda _: None
-    )
-    old_name = first[0].filename
-    with pytest.raises(TalosError, match="pass --force"):
-        run_generate_application(
-            _config(out),
-            completer=ScriptedCompleter([_valid_record("accepted")]),
-            echo=lambda _: None,
-        )
-    run_generate_application(
-        _config(out, force=True),
-        completer=ScriptedCompleter(
-            [
-                _valid_record(
-                    "accepted", customer_name="New Person", customer_id="SYN-444444"
-                )
-            ]
-        ),
+        _config(out),
+        completer=ScriptedCompleter([_unique_record("accepted", 1)]),
         echo=lambda _: None,
+        clock=_frozen_clock,
     )
-    text = (out / old_name).read_text(encoding="utf-8")
-    assert "New Person" in text
+    second = run_generate_application(
+        _config(out),
+        completer=ScriptedCompleter([_unique_record("accepted", 2)]),
+        echo=lambda _: None,
+        clock=_frozen_clock,
+    )
+    assert first[0].record["application_id"] != second[0].record["application_id"]
+    assert (out / first[0].filename).is_file()
+    assert (out / second[0].filename).is_file()
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    assert set(manifest["documents"]) == {
+        first[0].record["application_id"],
+        second[0].record["application_id"],
+    }
 
 
 def test_validation_retry_then_success(tmp_path: Path) -> None:
@@ -328,7 +367,10 @@ def test_validation_retry_then_success(tmp_path: Path) -> None:
     good = _valid_record("accepted")
     completer = ScriptedCompleter([bad, good])
     rendered = run_generate_application(
-        _config(tmp_path / "apps"), completer=completer, echo=lambda _: None
+        _config(tmp_path / "apps"),
+        completer=completer,
+        echo=lambda _: None,
+        clock=_frozen_clock,
     )
     assert len(rendered) == 1
     assert len(completer.calls) == 2
@@ -342,6 +384,7 @@ def test_validation_failure_after_retry_writes_nothing(tmp_path: Path) -> None:
             _config(out),
             completer=ScriptedCompleter([bad, bad]),
             echo=lambda _: None,
+            clock=_frozen_clock,
         )
     assert not out.exists()
 
@@ -366,63 +409,66 @@ def test_missing_project_endpoint_exits_2(
     assert "AZURE_AI_PROJECT_ENDPOINT" in result.output
 
 
-def test_force_overwrite_deletes_previous_application_blob(tmp_path: Path) -> None:
+def test_force_application_id_keeps_serial(tmp_path: Path) -> None:
     out = tmp_path / "apps"
-    out.mkdir()
-    old_name = "credit-application-CA-2025-000099.md"
-    (out / old_name).write_text(
-        "# Credit application CA-2025-000099\n", encoding="utf-8"
+    first = run_generate_application(
+        _config(out),
+        completer=ScriptedCompleter([_unique_record("accepted", 1)]),
+        echo=lambda _: None,
+        clock=_frozen_clock,
     )
-    (out / "manifest.json").write_text(
-        json.dumps(
-            {
-                "documents": [
-                    {
-                        "slot": "accepted",
-                        "application_id": "CA-2025-000099",
-                        "intended_outcome": "accepted",
-                        "filename": old_name,
-                        "customer_name": "Old Person",
-                        "customer_id": "SYN-000001",
-                        "product_family": "residential_mortgage",
-                    }
-                ]
-            }
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    serial = first[0].record["application_id"]
+    old_name = first[0].filename
     store = FakeBlobStore(container="client-applications")
     store.blobs[old_name] = FakeBlob(data=b"old", metadata={})
     store.blobs["accepted.md"] = FakeBlob(data=b"legacy", metadata={})
     rendered = run_generate_application(
-        _config(out, local_only=False, force=True),
-        completer=ScriptedCompleter([_valid_record("accepted")]),
+        _config(
+            out,
+            local_only=False,
+            force=True,
+            application_id=serial,
+            types=(),
+        ),
+        completer=ScriptedCompleter(
+            [
+                _unique_record(
+                    "accepted",
+                    2,
+                    customer_name="New Person",
+                    customer_id="SYN-444444",
+                )
+            ]
+        ),
         blob_store=store,
         echo=lambda _: None,
+        clock=_frozen_clock,
     )
-    new_name = rendered[0].filename
-    assert new_name != old_name
-    assert old_name not in store.blobs
-    assert "accepted.md" not in store.blobs
-    assert new_name in store.blobs
-    assert not (out / old_name).exists()
-    assert not (out / "accepted.md").exists()
+    assert rendered[0].record["application_id"] == serial
+    assert rendered[0].filename == old_name
+    assert old_name in store.blobs
+    assert "accepted.md" in store.blobs
+    text = (out / old_name).read_text(encoding="utf-8")
+    assert "New Person" in text
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["documents"][serial]["intended_outcome"] == "accepted"
+    assert list(manifest["documents"]) == [serial]
 
 
-def test_orphan_local_application_files_are_removed(tmp_path: Path) -> None:
+def test_old_local_application_files_stay(tmp_path: Path) -> None:
     out = tmp_path / "apps"
     out.mkdir()
-    (out / "credit-application-CA-2025-000050.md").write_text(
-        "orphan\n", encoding="utf-8"
-    )
+    orphan = out / "credit-application-CA-20260115-1768478400999.md"
+    orphan.write_text("orphan\n", encoding="utf-8")
     rendered = run_generate_application(
         _config(out),
         completer=ScriptedCompleter([_valid_record("accepted")]),
         echo=lambda _: None,
+        clock=_frozen_clock,
     )
-    assert not (out / "credit-application-CA-2025-000050.md").exists()
+    assert orphan.is_file()
     assert (out / rendered[0].filename).is_file()
+    assert rendered[0].filename != orphan.name
 
 
 def test_corrupt_manifest_fails(tmp_path: Path) -> None:
@@ -434,6 +480,7 @@ def test_corrupt_manifest_fails(tmp_path: Path) -> None:
             _config(out),
             completer=ScriptedCompleter([_valid_record("accepted")]),
             echo=lambda _: None,
+            clock=_frozen_clock,
         )
 
 
@@ -445,6 +492,7 @@ def test_optional_blob_upload_hash_metadata(tmp_path: Path) -> None:
         completer=completer,
         blob_store=store,
         echo=lambda _: None,
+        clock=_frozen_clock,
     )
     filename = rendered[0].filename
     assert store.uploads == [filename]
@@ -508,10 +556,13 @@ def test_gitignore_covers_generated_applications(repo_root: Path) -> None:
     assert "manifest.json" in nested
 
 
-def test_allocate_application_id_skips_used() -> None:
-    used = {"CA-2026-000001"}
-    assert allocate_application_id(used, year=2026) == "CA-2026-000002"
-    assert re.fullmatch(APPLICATION_ID_RE, allocate_application_id(set(), year=2026))
+def test_serial_allocator_bumps_unix_ms_on_collision() -> None:
+    used = {FROZEN_SERIAL}
+    allocator = SerialAllocator(used, clock=_frozen_clock)
+    first = allocator.mint()
+    assert first == "CA-20260914-1789344000001"
+    assert re.fullmatch(APPLICATION_ID_RE, first)
+    assert ":" not in first
 
 
 def test_forbidden_outcome_tokens_are_rejected_in_id() -> None:
@@ -599,6 +650,7 @@ def test_generated_markdown_opens_with_heading_not_watermark(tmp_path: Path) -> 
         _config(out),
         completer=ScriptedCompleter([_valid_record("accepted")]),
         echo=lambda _: None,
+        clock=_frozen_clock,
     )
     text = (out / rendered[0].filename).read_text(encoding="utf-8")
     heading = credit_application_heading(rendered[0].record["application_id"])
@@ -613,6 +665,7 @@ def test_generated_markdown_has_no_yaml_frontmatter(tmp_path: Path) -> None:
         _config(out),
         completer=ScriptedCompleter([_valid_record("accepted")]),
         echo=lambda _: None,
+        clock=_frozen_clock,
     )
     text = (out / rendered[0].filename).read_text(encoding="utf-8")
     before_heading: list[str] = []
@@ -623,13 +676,223 @@ def test_generated_markdown_has_no_yaml_frontmatter(tmp_path: Path) -> None:
     assert "---" not in before_heading
     with pytest.raises(TalosError, match="YAML front matter"):
         parse_application_markdown(
-            "---\napplication_id: CA-2026-000001\n---\n"
-            "# Credit application CA-2026-000001\n"
+            f"---\napplication_id: {SAMPLE_SERIAL}\n---\n"
+            f"# Credit application {SAMPLE_SERIAL}\n"
         )
 
 
 def test_parse_rejects_watermark_prefix() -> None:
     with pytest.raises(TalosError, match="must not start with the policy watermark"):
         parse_application_markdown(
-            f"{WATERMARK}\n\n# Credit application CA-2026-000001\n"
+            f"{WATERMARK}\n\n# Credit application {SAMPLE_SERIAL}\n"
         )
+
+
+def test_force_without_application_id_is_usage_error() -> None:
+    result = CliRunner().invoke(
+        cli,
+        [
+            "generate",
+            "application",
+            "--type",
+            "accepted",
+            "--force",
+            "--local-only",
+            "--no-terraform",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "--application-id" in result.output
+
+
+def test_force_with_count_is_usage_error() -> None:
+    result = CliRunner().invoke(
+        cli,
+        [
+            "generate",
+            "application",
+            "--type",
+            "accepted",
+            "--force",
+            "--application-id",
+            FROZEN_SERIAL,
+            "--count",
+            "2",
+            "--local-only",
+            "--no-terraform",
+        ],
+    )
+    assert result.exit_code == 1
+    assert "--count" in result.output
+
+
+def test_count_without_type_or_all_is_usage_error() -> None:
+    result = CliRunner().invoke(
+        cli,
+        ["generate", "application", "--count", "2", "--local-only", "--no-terraform"],
+    )
+    assert result.exit_code == 1
+    assert "--count" in result.output
+    assert "--type" in result.output or "--all" in result.output
+
+
+def test_serial_allocator_issues_100_distinct_ids_when_clock_frozen() -> None:
+    allocator = SerialAllocator(clock=_frozen_clock)
+    serials = [allocator.mint() for _ in range(100)]
+    assert len(set(serials)) == 100
+    assert serials[0] == FROZEN_SERIAL
+    assert serials[1] == "CA-20260914-1789344000001"
+    assert serials[-1] == "CA-20260914-1789344000099"
+    for serial in serials:
+        assert re.fullmatch(APPLICATION_ID_RE, serial)
+        assert ":" not in serial
+        assert not contains_forbidden_outcome_token(serial)
+
+
+def test_count_100_writes_100_distinct_files_and_manifest_rows(tmp_path: Path) -> None:
+    out = tmp_path / "apps"
+    completer = ScriptedCompleter(
+        [_unique_record("accepted", index) for index in range(1, 101)]
+    )
+    rendered = run_generate_application(
+        _config(out, count=100),
+        completer=completer,
+        echo=lambda _: None,
+        clock=_frozen_clock,
+    )
+    assert len(rendered) == 100
+    ids = [item.record["application_id"] for item in rendered]
+    assert len(set(ids)) == 100
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    assert set(manifest["documents"]) == set(ids)
+    files = list(out.glob("credit-application-*.md"))
+    assert len(files) == 100
+    for item in rendered:
+        assert (out / item.filename).is_file()
+        assert manifest["documents"][item.record["application_id"]]["filename"] == (
+            item.filename
+        )
+        assert ":" not in item.filename
+
+
+def test_all_count_100_writes_300_distinct_files(tmp_path: Path) -> None:
+    out = tmp_path / "apps"
+    payloads = (
+        [_unique_record("accepted", index) for index in range(1, 101)]
+        + [_unique_record("rejected", index) for index in range(101, 201)]
+        + [_unique_record("missing-data", index) for index in range(201, 301)]
+    )
+    rendered = run_generate_application(
+        _config(out, types=APPLICATION_TYPES, count=100),
+        completer=ScriptedCompleter(payloads),
+        echo=lambda _: None,
+        clock=_frozen_clock,
+    )
+    assert len(rendered) == 300
+    ids = [item.record["application_id"] for item in rendered]
+    assert len(set(ids)) == 300
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    assert len(manifest["documents"]) == 300
+    by_outcome: dict[str, int] = {"accepted": 0, "rejected": 0, "missing-data": 0}
+    for doc in manifest["documents"].values():
+        by_outcome[doc["intended_outcome"]] += 1
+    assert by_outcome == {"accepted": 100, "rejected": 100, "missing-data": 100}
+    assert len(list(out.glob("credit-application-*.md"))) == 300
+
+
+def test_dry_run_count_prints_serials_without_writing(tmp_path: Path) -> None:
+    out = tmp_path / "apps"
+    lines: list[str] = []
+    rendered = run_generate_application(
+        _config(out, count=3, dry_run=True),
+        completer=ScriptedCompleter([_valid_record("accepted")]),
+        echo=lines.append,
+        clock=_frozen_clock,
+    )
+    assert rendered == []
+    assert not out.exists()
+    serials = [line for line in lines if "credit-application-CA-" in line]
+    assert len(serials) == 3
+    assert FROZEN_SERIAL in serials[0]
+    assert "1789344000001" in serials[1]
+
+
+def test_count_fail_keeps_prior_serials(tmp_path: Path) -> None:
+    out = tmp_path / "apps"
+    bad = _unique_record("accepted", 3, email="x@gmail.com")
+    with pytest.raises(TalosError, match="after retry"):
+        run_generate_application(
+            _config(out, count=3),
+            completer=ScriptedCompleter(
+                [_unique_record("accepted", 1), _unique_record("accepted", 2), bad, bad]
+            ),
+            echo=lambda _: None,
+            clock=_frozen_clock,
+        )
+    files = list(out.glob("credit-application-*.md"))
+    assert len(files) == 2
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    assert len(manifest["documents"]) == 2
+
+
+def test_llm_fail_does_not_consume_serial(tmp_path: Path) -> None:
+    out = tmp_path / "apps"
+    bad = _valid_record("accepted", email="x@gmail.com")
+    with pytest.raises(TalosError, match="after retry"):
+        run_generate_application(
+            _config(out),
+            completer=ScriptedCompleter([bad, bad]),
+            echo=lambda _: None,
+            clock=_frozen_clock,
+        )
+    assert not out.exists()
+    rendered = run_generate_application(
+        _config(out),
+        completer=ScriptedCompleter([_valid_record("accepted")]),
+        echo=lambda _: None,
+        clock=_frozen_clock,
+    )
+    assert rendered[0].record["application_id"] == FROZEN_SERIAL
+
+
+def test_force_type_updates_intended_outcome(tmp_path: Path) -> None:
+    out = tmp_path / "apps"
+    first = run_generate_application(
+        _config(out),
+        completer=ScriptedCompleter([_unique_record("accepted", 1)]),
+        echo=lambda _: None,
+        clock=_frozen_clock,
+    )
+    serial = first[0].record["application_id"]
+    run_generate_application(
+        _config(out, force=True, application_id=serial, types=("rejected",)),
+        completer=ScriptedCompleter([_unique_record("rejected", 2)]),
+        echo=lambda _: None,
+        clock=_frozen_clock,
+    )
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["documents"][serial]["intended_outcome"] == "rejected"
+    assert list(manifest["documents"]) == [serial]
+
+
+def test_application_id_does_not_encode_type(tmp_path: Path) -> None:
+    out = tmp_path / "apps"
+    rendered = run_generate_application(
+        _config(out, types=APPLICATION_TYPES),
+        completer=ScriptedCompleter(
+            [
+                _unique_record("accepted", 1),
+                _unique_record("rejected", 2),
+                _unique_record("missing-data", 3),
+            ]
+        ),
+        echo=lambda _: None,
+        clock=_frozen_clock,
+    )
+    for item in rendered:
+        serial = item.record["application_id"]
+        assert re.fullmatch(APPLICATION_ID_RE, serial)
+        upper = serial.upper()
+        for token in ("ACCEPTED", "REJECTED", "MISSING"):
+            assert token not in upper
+        assert item.application_type not in serial

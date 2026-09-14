@@ -6,12 +6,17 @@ import pytest
 
 from talos.constants import (
     DEFAULT_APPLICATION_KNOWLEDGE_SOURCE,
+    DEFAULT_APPLICATION_OUTPUT_RELATIVE,
     DEFAULT_KNOWLEDGE_SOURCE,
-    MIN_APPLICATION_INDEXED_ITEMS,
     MIN_INDEXED_ITEMS,
     SEARCH_SCOPE,
 )
-from talos.provision import extract_index_name, synchronization_counts
+from talos.env import repo_root
+from talos.provision import (
+    extract_index_name,
+    local_corpus_size,
+    synchronization_counts,
+)
 from tests.live_support import get_or_skip, knowledge_source_status, search_url
 
 pytestmark = pytest.mark.ingestion
@@ -64,9 +69,12 @@ def test_application_knowledge_source_indexed(
     if end_time is None:
         pytest.skip("application knowledge source has not finished indexing")
     assert failed == 0
+    expected = local_corpus_size(repo_root() / DEFAULT_APPLICATION_OUTPUT_RELATIVE)
+    if expected == 0:
+        pytest.skip("no local application corpus")
     counted = (
         processed
-        if processed >= MIN_APPLICATION_INDEXED_ITEMS
+        if processed >= expected
         else _index_count(live_rest, live_env, DEFAULT_APPLICATION_KNOWLEDGE_SOURCE)
     )
-    assert counted >= MIN_APPLICATION_INDEXED_ITEMS
+    assert counted >= expected

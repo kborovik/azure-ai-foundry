@@ -132,17 +132,17 @@ def application_cases() -> list[dict[str, Any]]:
             "no local data/client-applications/credit-application-*.md; "
             "run `uv run talos generate application --all` first"
         )
+    from talos.application import iter_manifest_documents
+
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     cases: list[dict[str, Any]] = []
-    for item in manifest.get("documents") or []:
-        if not isinstance(item, dict):
-            continue
+    for item in iter_manifest_documents(manifest):
         filename = str(item.get("filename") or "")
         path = live / filename
         if not path.is_file():
             continue
         record = parse_application_markdown(path.read_text(encoding="utf-8"))
-        slot = str(item.get("slot") or item.get("intended_outcome") or "")
+        slot = str(item.get("intended_outcome") or item.get("slot") or "")
         record["product_family"] = item.get("product_family")
         record["intended_outcome"] = item.get("intended_outcome") or slot
         record["application_type"] = slot

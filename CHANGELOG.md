@@ -4,6 +4,7 @@
 
 ### Changed
 
+- **Unique application serials:** `talos generate application` mints `CA-{YYYYMMDD}-{unix_ms}` via SerialAllocator (bump `unix_ms` on collision). `--count N` writes N files per selected type (`--all --count N` → 3N). Generate always appends unless `--force --application-id` regenerates a named serial. `--force` without `--application-id` or with `--count` is a usage error. Manifest is keyed by `application_id`. `talos deploy --wait` requires application processed ≥ local corpus size.
 - **Tfstate resource group:** remote-state RG is `terraform-state-shared`, reused across projects (was `credit-policy-tfstate`). `gmake infra-backend-destroy` deletes this project's storage account only, not the shared RG.
 - **Resource group names:** drop the `rg-` prefix. Workload RG is `credit-policy-<env>`; tfstate RG is `terraform-state-shared`.
 - **Tfstate account:** remote-state storage account is the fixed string `lab5tfstate1` (was `sttfstlab5`; never workload `stcp*`). Makefile `TFSTATE_ACCOUNT`, README backend-config, and GHA release init use the new name.

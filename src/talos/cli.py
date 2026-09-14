@@ -145,13 +145,24 @@ def generate_policy(
     "application_type",
     type=click.Choice(APPLICATION_TYPES, case_sensitive=True),
     default=None,
-    help="Hidden operator constraint: one slot. Not written into id, filename, or Markdown.",
+    help="Hidden operator constraint: intended_outcome. Not written into id, filename, or Markdown.",
 )
 @click.option(
     "--all",
     "all_types",
     is_flag=True,
-    help="Generate all three slots with unique identities (operator constraint).",
+    help="Generate all three intended_outcomes with unique identities (operator constraint).",
+)
+@click.option(
+    "--count",
+    type=int,
+    default=None,
+    help="Mint N new serials per selected type. --all --count N writes 3N files. Default 1.",
+)
+@click.option(
+    "--application-id",
+    default=None,
+    help="With --force, regenerate this serial in place.",
 )
 @click.option(
     "--out",
@@ -189,7 +200,7 @@ def generate_policy(
 @click.option(
     "--force",
     is_flag=True,
-    help="Overwrite an existing slot.",
+    help="Regenerate --application-id keeping the serial.",
 )
 @click.option(
     "--no-terraform",
@@ -199,6 +210,8 @@ def generate_policy(
 def generate_application_cmd(
     application_type: str | None,
     all_types: bool,
+    count: int | None,
+    application_id: str | None,
     out: Path | None,
     facts_path: Path | None,
     container: str,
@@ -212,11 +225,28 @@ def generate_application_cmd(
     from talos.application import ApplicationGenerateConfig, run_generate_application
 
     try:
-        if bool(application_type) == bool(all_types):
+        if force and count is not None:
+            raise TalosError("--force cannot be combined with --count", exit_code=1)
+        if force and not (application_id or "").strip():
+            raise TalosError("--force requires --application-id", exit_code=1)
+        if (application_id or "").strip() and not force:
+            raise TalosError("--application-id requires --force", exit_code=1)
+        if force and all_types:
+            raise TalosError("--force cannot be combined with --all", exit_code=1)
+        if count is not None and not application_type and not all_types:
+            raise TalosError("--count requires --type or --all", exit_code=1)
+        if count is not None and count < 1:
+            raise TalosError("--count must be >= 1", exit_code=1)
+        if not force and bool(application_type) == bool(all_types):
             raise TalosError("exactly one of --type or --all is required", exit_code=1)
         root = repo_root()
         env = resolve_env(use_terraform=not no_terraform)
-        types = APPLICATION_TYPES if all_types else (application_type or "",)
+        if all_types:
+            types = APPLICATION_TYPES
+        elif application_type:
+            types = (application_type,)
+        else:
+            types = ()
         config = ApplicationGenerateConfig(
             out=out or (root / DEFAULT_APPLICATION_OUTPUT_RELATIVE),
             facts_path=facts_path or (root / DEFAULT_FACTS_RELATIVE),
@@ -228,6 +258,8 @@ def generate_application_cmd(
             account_url=account_url or "",
             container=container,
             project_endpoint=env.get("AZURE_AI_PROJECT_ENDPOINT") or "",
+            count=1 if count is None else count,
+            application_id=(application_id or "").strip() or None,
         )
         run_generate_application(config, echo=click.echo)
     except TalosError as exc:

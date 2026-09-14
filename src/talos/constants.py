@@ -42,7 +42,7 @@ DEFAULT_APPLICATION_USER_PROMPT_RELATIVE = "corpus/application/user.md.j2"
 DEFAULT_APPLICATION_TEMPLATE_RELATIVE = "corpus/application/document.md.j2"
 
 APPLICATION_TYPES = ("accepted", "rejected", "missing-data")
-APPLICATION_ID_RE = r"^CA-\d{4}-\d{6}$"
+APPLICATION_ID_RE = r"^CA-\d{8}-\d+$"
 APPLICATION_FILENAME_TEMPLATE = "credit-application-{application_id}.md"
 FORBIDDEN_OUTCOME_TOKENS = (
     "ACCEPTED",
