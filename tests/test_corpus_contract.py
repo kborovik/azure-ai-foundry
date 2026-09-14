@@ -55,11 +55,13 @@ def test_generated_files_exist_for_each_fact_doc() -> None:
         assert re.fullmatch(re.escape(doc["id"]) + r"-.+\.md", doc["filename"])
 
 
-def test_watermark_on_every_file() -> None:
-    assert _FACTS["watermark"] == WATERMARK
+def test_policies_have_no_synthetic_watermark() -> None:
+    assert "watermark" not in _FACTS
     for path in policies_dir().glob("*.md"):
         text = path.read_text(encoding="utf-8")
-        assert first_visible_line(text) == WATERMARK, path.name
+        assert WATERMARK not in text, path.name
+        assert "Not a real bank policy" not in text, path.name
+        assert first_visible_line(text).startswith("> Policy ID:"), path.name
 
 
 @pytest.mark.parametrize("doc_id,filename,key,value", _FACT_CASES)
@@ -72,7 +74,7 @@ def test_each_fact_value_in_document(
 
 def test_manifest_matches_files() -> None:
     manifest = load_manifest()
-    assert manifest["watermark"] == WATERMARK
+    assert "watermark" not in manifest
     assert manifest["container"] == "credit-policies"
     documents = manifest["documents"]
     assert {item["id"] for item in documents} == set(CORPUS_IDS)

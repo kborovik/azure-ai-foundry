@@ -4,6 +4,9 @@
 
 ### Changed
 
+- **No synthetic watermark:** policy Markdown, `facts.yaml`, and both manifests no longer carry `SYNTHETIC — DEMO ONLY` or "Not a real bank policy". The agent treats retrieved documents as published Contoso Demo Bank policy.
+- **Application generate `expected_outcome`:** the LLM JSON must include `expected_outcome` matching `--type`. It is stored on `manifest.json` (`expected_outcome` + `intended_outcome`) and stripped from the borrower filing. `accepted`/`rejected` filings must also include policy facts the agent checks (`appraisal_date` + `licensed_appraiser` for residential; `valuation_date` for CRE). `accept` requires a complete file that clears published limits; incomplete facts are `missing-data`.
+- **Live e2e cases:** committed gold trio in `tests/fixtures/client-applications/` is the catalog. Tests pick with `E2E_APPLICATION_SEED` (default 0). `talos deploy` seeds those files into `data/client-applications/` before blob-sync.
 - **Live agent tests:** each `invoke_agent` call prints `Agent Request` (user prompt) then `Agent Response` (extracted reply) to stdout so a human can evaluate the flow. Visible under `gmake e2e` (`-s` already on).
 - **`gmake e2e`:** runs `check`, Azure preflight, `infra-create`, `generate` (`talos generate application --all`), and `deploy` (`talos deploy --wait`) before live pytest. Live pytest is `-v -ra -s --durations=0` so each test name, skip reason, stdout, and duration print instead of a compact `...F` line. One target is the full live chain; `FILE=` still scopes the pytest file.
 - **`gmake infra-status`:** one concise live Azure status report (RG, ARM resources, Foundry deployments, prompt agent, blob counts per container). Replaces `ai-account` / `ai-project` / `ai-agent` / `ai-search` / `ai-storage`. Names from `infra/outputs.json` via `jq`. Does not spawn `terraform output`.

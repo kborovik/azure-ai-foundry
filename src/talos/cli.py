@@ -10,6 +10,7 @@ from talos.constants import (
     APPLICATION_TYPES,
     DEFAULT_AGENT_NAME,
     DEFAULT_APPLICATION_CONTAINER,
+    DEFAULT_APPLICATION_FIXTURES_RELATIVE,
     DEFAULT_APPLICATION_KNOWLEDGE_SOURCE,
     DEFAULT_APPLICATION_OUTPUT_RELATIVE,
     DEFAULT_APP_VERSION,
@@ -413,6 +414,8 @@ def deploy(
             instructions_path=instructions_path,
             policy_dir=repo_root() / DEFAULT_OUTPUT_RELATIVE,
             application_dir=repo_root() / DEFAULT_APPLICATION_OUTPUT_RELATIVE,
+            application_fixtures_dir=repo_root()
+            / DEFAULT_APPLICATION_FIXTURES_RELATIVE,
             wait=wait,
             skip_indexer_run=skip_indexer_run,
             skip_endpoint_patch=skip_endpoint_patch,

@@ -7,9 +7,10 @@ import pytest
 
 from talos.env import repo_root
 from tests.live_support import (
-    application_cases,
     assert_policy_only_citations,
+    expected_decision_token,
     invoke_agent,
+    pick_application_case,
 )
 
 
@@ -81,33 +82,27 @@ def test_policy_only_citations_reject_application_blob() -> None:
 @pytest.mark.teams
 def test_teams_evaluate_by_application_id(live_env: dict[str, str]) -> None:
     _require_activity_client(live_env)
-    cases = application_cases()
-    if not cases:
-        pytest.skip("no application fixtures")
-    application_id = str(cases[0]["application_id"])
+    record = pick_application_case()
+    application_id = str(record["application_id"])
     text = invoke_agent(
         live_env,
         f"In Teams 1:1, evaluate application {application_id}.",
     )
-    assert (
-        application_id in text or "accept" in text.lower() or "reject" in text.lower()
-    )
+    assert application_id in text
+    assert expected_decision_token(str(record["expected_judgement"])) in text.lower()
 
 
 @pytest.mark.teams
 def test_teams_evaluate_by_customer_name(live_env: dict[str, str]) -> None:
     _require_activity_client(live_env)
-    cases = application_cases()
-    if not cases:
-        pytest.skip("no application fixtures")
-    name = str(cases[0]["customer_name"])
+    record = pick_application_case()
+    name = str(record["customer_name"])
     text = invoke_agent(
         live_env,
         f"Evaluate the application for {name}.",
     )
-    assert (
-        name.split()[0] in text or "accept" in text.lower() or "reject" in text.lower()
-    )
+    assert name.split()[0] in text
+    assert expected_decision_token(str(record["expected_judgement"])) in text.lower()
 
 
 @pytest.mark.teams

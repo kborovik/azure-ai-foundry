@@ -6,7 +6,7 @@ A Microsoft Teams assistant that evaluates client applications against published
 
 Credit officers process applications against published policy: read the filing, check LTV, DTI, and required documents, and record a decision. Today that means paging through policy PDFs while the deal is live. Generic chat models invent thresholds, committees, and eligibility rules.
 
-This repository is a **demo**, not a production origination system. It shows a Foundry Agent Service assistant that evaluates sample applications and helps the credit officer work the file in Microsoft Teams, one-to-one. Name an application by number or customer; the agent compares it to twelve synthetic credit-policy documents, flags missing items, and returns a cited judgement — accept, reject, or missing-data. Policy lookup is in service of that workflow. If the published policies do not cover the question, the agent says so rather than guessing.
+This repository is a **demo**, not a production origination system. It shows a Foundry Agent Service assistant that evaluates client applications and helps the credit officer work the file in Microsoft Teams, one-to-one. Name an application by number or customer; the agent compares it to twelve Contoso Demo Bank credit-policy documents, flags missing items, and returns a cited judgement — accept, reject, or missing-data. Policy lookup is in service of that workflow. If the published policies do not cover the question, the agent says so rather than guessing.
 
 ## How it works
 
@@ -113,7 +113,7 @@ flowchart TB
 
 1. **Create Azure Resources.** A development environment and a production-shaped environment. Each one gets document storage, enterprise search, a Foundry project, and the models the agent uses. Both environments are the same shape so a demo in the lab matches what production would look like.
 
-2. **Load Documents.** The twelve synthetic credit policies in this repository, and sample applications generated for the demo, are stored and indexed into the knowledge base. Until this step finishes, the agent has nothing grounded to quote.
+2. **Load Documents.** The twelve credit policies in this repository, and sample applications generated for the demo, are stored and indexed into the knowledge base. Until this step finishes, the agent has nothing grounded to quote.
 
 3. **Activate Agent.** The prompt agent is created in Foundry with a single instruction: answer only from the knowledge base, and cite the source. It cannot invent LTV, DTI, or committee names, and it will not override published policy.
 

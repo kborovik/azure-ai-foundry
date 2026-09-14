@@ -28,12 +28,18 @@ def test_instructions_contain_evaluation_mode() -> None:
         REFUSAL_SENTENCE in text.lower()
         or "That is not in the published policies." in text
     )
-    assert WATERMARK.split("—")[0].strip() in text or "SYNTHETIC" in text
+    assert WATERMARK not in text
+    assert "synthetic demo corpus" not in text.lower()
+    assert "if asked whether this is real" not in text.lower()
     assert "type nicknames" in text.lower() or "`accepted`" in text
     assert "CA-{YYYYMMDD}-{unix_ms}" in text
     assert "CP-DOC-2026-01" in text
     assert "attached" in text.lower()
     assert "required-document" in text.lower() or "required document" in text.lower()
+    assert "required title" in text.lower()
+    assert "appraisal_date" in text.lower() or "appraisal date" in text.lower()
+    assert "expected_outcome" in text
+    assert "complete" in text.lower()
     assert "infer" in text.lower()
     assert "filename" in text.lower()
     assert "source_name" in text

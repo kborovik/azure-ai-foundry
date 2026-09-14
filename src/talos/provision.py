@@ -41,6 +41,7 @@ from talos.constants import (
     SEARCH_SCOPE,
     WAIT_TIMEOUT_SECONDS,
 )
+from talos.application import seed_application_fixtures
 from talos.env import repo_root
 from talos.errors import TalosError
 from talos.generate import BlobStore, open_blob_store, sync_markdown_directory
@@ -80,6 +81,7 @@ class DeployConfig:
     instructions_path: Path | None = None
     policy_dir: Path | None = None
     application_dir: Path | None = None
+    application_fixtures_dir: Path | None = None
     wait: bool = False
     skip_indexer_run: bool = False
     skip_endpoint_patch: bool = False
@@ -387,6 +389,16 @@ def run_deploy(
     blob_stores: dict[str, BlobStore] | None = None,
     echo: Echo = print,
 ) -> None:
+    fixture_dir = config.application_fixtures_dir
+    application_dir = config.application_dir or (
+        repo_root() / DEFAULT_APPLICATION_OUTPUT_RELATIVE
+    )
+    if fixture_dir is not None:
+        if config.dry_run:
+            echo(f"dry-run: would seed application fixtures from {fixture_dir}")
+        else:
+            seeded = seed_application_fixtures(application_dir, fixture_dir)
+            echo(f"seeded {seeded} application fixture files into {application_dir}")
     sources = deploy_sources(config)
     if config.dry_run:
         _echo_dry_run(config, sources, echo)

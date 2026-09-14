@@ -4,49 +4,40 @@ import pytest
 
 from talos.constants import APPLICATION_TYPES, REFUSAL_SENTENCE
 from tests.live_support import (
-    application_cases,
     assert_policy_only_citations,
     citation_glyph_present,
+    expected_decision_token,
     invoke_agent,
+    pick_application_case,
 )
 
 pytestmark = pytest.mark.agent
 
 
 def test_evaluate_by_application_id(live_env: dict[str, str]) -> None:
-    cases = [
-        item
-        for item in application_cases()
-        if item.get("application_type") == "accepted"
-    ]
-    if not cases:
-        pytest.skip("no accepted application fixture")
-    application_id = str(cases[0]["application_id"])
+    record = pick_application_case("accepted")
+    application_id = str(record["application_id"])
     text = invoke_agent(
         live_env,
         f"Evaluate client application {application_id} against published credit policy.",
     )
     lower = text.lower()
-    assert application_id in text or "accept" in lower
+    assert application_id in text
+    assert expected_decision_token(str(record["expected_judgement"])) in lower
     assert citation_glyph_present(text)
     assert_policy_only_citations(text)
 
 
 def test_evaluate_by_customer_name(live_env: dict[str, str]) -> None:
-    cases = [
-        item
-        for item in application_cases()
-        if item.get("application_type") == "rejected"
-    ]
-    if not cases:
-        pytest.skip("no rejected application fixture")
-    name = str(cases[0]["customer_name"])
+    record = pick_application_case("rejected")
+    name = str(record["customer_name"])
     text = invoke_agent(
         live_env,
         f"Please evaluate the application for customer {name}.",
     )
     lower = text.lower()
-    assert name.split()[0] in text or "reject" in lower
+    assert name.split()[0] in text
+    assert expected_decision_token(str(record["expected_judgement"])) in lower
     assert citation_glyph_present(text)
     assert_policy_only_citations(text)
 
@@ -69,26 +60,14 @@ def test_ask_when_missing_identifier(live_env: dict[str, str]) -> None:
 def test_one_case_per_application_type(
     live_env: dict[str, str], application_type: str
 ) -> None:
-    cases = [
-        item
-        for item in application_cases()
-        if item.get("application_type") == application_type
-    ]
-    if not cases:
-        pytest.skip(f"no {application_type} application")
-    record = cases[0]
+    record = pick_application_case(application_type)
     text = invoke_agent(
         live_env,
         f"Evaluate application {record['application_id']} for {record['customer_name']}.",
     )
     lower = text.lower()
-    expected = str(record["expected_judgement"])
-    token = (
-        "accept"
-        if expected == "accepted"
-        else ("reject" if expected == "rejected" else "missing")
-    )
-    assert token in lower
+    assert str(record["application_id"]) in text
+    assert expected_decision_token(str(record["expected_judgement"])) in lower
     assert citation_glyph_present(text)
     assert_policy_only_citations(text)
 

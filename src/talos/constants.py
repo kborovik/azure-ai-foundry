@@ -11,6 +11,7 @@ FOUNDRY_SCOPE = "https://ai.azure.com/.default"
 
 DEFAULT_CONTAINER = "credit-policies"
 DEFAULT_APPLICATION_CONTAINER = "client-applications"
+DEFAULT_APPLICATION_FIXTURES_RELATIVE = "tests/fixtures/client-applications"
 DEFAULT_KNOWLEDGE_SOURCE = "ks-credit-policies"
 DEFAULT_APPLICATION_KNOWLEDGE_SOURCE = "ks-client-applications"
 DEFAULT_KNOWLEDGE_BASE = "kb-credit-policies"
@@ -24,12 +25,12 @@ DEFAULT_DEVELOPER_WEBSITE_URL = "https://azure.microsoft.com"
 DEFAULT_PRIVACY_URL = "https://privacy.microsoft.com"
 DEFAULT_TERMS_OF_USE_URL = "https://www.microsoft.com/legal/terms-of-use"
 DEFAULT_PUBLISH_SHORT_DESCRIPTION = (
-    "Cited credit-policy answers and synthetic application evaluation."
+    "Cited credit-policy answers and client application evaluation."
 )
 DEFAULT_PUBLISH_FULL_DESCRIPTION = (
-    "Demo Foundry prompt agent that answers credit-policy questions from synthetic "
-    "Markdown in Foundry IQ and evaluates synthetic client applications by "
-    "application_id or customer_name. Not a production credit system."
+    "Contoso Demo Bank prompt agent that answers credit-policy questions from "
+    "published Markdown in Foundry IQ and evaluates client applications by "
+    "application_id or customer_name."
 )
 PUBLISH_SCOPE_JUST_YOU = "Shared"
 DEFAULT_CHAT_DEPLOYMENT = "gpt-5-mini"
@@ -107,6 +108,14 @@ PRODUCT_REQUIRED_DOCUMENTS = {
         "YTD P&L",
     ),
 }
+# Facts the agent needs to finish evaluation (CP-COL appraisal/valuation age).
+PRODUCT_REQUIRED_FACTS: dict[str, tuple[str, ...]] = {
+    "residential_mortgage": ("appraisal_date", "licensed_appraiser"),
+    "commercial_real_estate": ("valuation_date",),
+    "unsecured_consumer": (),
+    "sme_lending": (),
+    "construction_development": ("valuation_date",),
+}
 # field, op, limit — facts.yaml literals (80%, 43%, 680, 65%, 1.25x, USD 2,500,000, …).
 PRODUCT_FACILITY_LIMITS: dict[str, tuple[tuple[str, str, float], ...]] = {
     "residential_mortgage": (
@@ -136,9 +145,14 @@ PRODUCT_FACILITY_LIMITS: dict[str, tuple[tuple[str, str, float], ...]] = {
 }
 FACILITY_PROMPT_HINTS = {
     "residential_mortgage": (
-        "Owner-occupied residential: max LTV 80%, max DTI 43%, min credit score 680."
+        "Owner-occupied residential: max LTV 80%, max DTI 43%, min credit score 680. "
+        "Include facility.appraisal_date as YYYY-MM-DD within the last 90 days and "
+        "licensed_appraiser yes (AVM only if LTV ≤ 60% and loan ≤ USD 400,000)."
     ),
-    "commercial_real_estate": "Stabilized CRE: max LTV 65%, min DSCR 1.25x.",
+    "commercial_real_estate": (
+        "Stabilized CRE: max LTV 65%, min DSCR 1.25x. "
+        "Include facility.valuation_date as YYYY-MM-DD within the last 120 days."
+    ),
     "unsecured_consumer": (
         "Unsecured personal loan: max USD 50,000, max term 60 months, min FICO 700, "
         "max DTI 36%."
@@ -234,7 +248,7 @@ CANONICAL_ENV = (
 )
 
 KS_DESCRIPTION = (
-    "Synthetic Contoso Demo Bank credit policies: residential mortgage LTV/DTI, "
+    "Contoso Demo Bank credit policies: residential mortgage LTV/DTI, "
     "commercial real estate, unsecured consumer, SME lending, exceptions and override "
     "authority, prohibited sectors, collateral valuation, documentation, related-party "
     "lending, climate/ESG overlay, construction lending, and delegated credit authority. "
@@ -242,14 +256,13 @@ KS_DESCRIPTION = (
 )
 
 KS_APPLICATION_DESCRIPTION = (
-    "Synthetic Contoso Demo Bank client applications for demo evaluation only. "
-    "Identify an application by application_id or customer_name. Not a production "
-    "origination system."
+    "Contoso Demo Bank client applications. Identify an application by "
+    "application_id or customer_name."
 )
 
 KB_DESCRIPTION = (
-    "Contoso Demo Bank credit policy knowledge base. Grounds answers in synthetic "
-    "published policies and evaluates synthetic client applications."
+    "Contoso Demo Bank credit policy knowledge base. Grounds answers in published "
+    "policies and evaluates client applications."
 )
 
 KB_RETRIEVAL_INSTRUCTIONS = (

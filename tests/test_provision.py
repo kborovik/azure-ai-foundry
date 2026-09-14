@@ -60,12 +60,12 @@ def _config(tmp_path: Path, **overrides: object) -> DeployConfig:
     if not any(policy_dir.glob("*.md")):
         for index in range(12):
             (policy_dir / f"policy-{index:02d}.md").write_text(
-                "SYNTHETIC — DEMO ONLY\n\n# policy\n", encoding="utf-8"
+                "# policy\n", encoding="utf-8"
             )
     if not any(application_dir.glob("*.md")):
         for kind in ("accepted", "rejected", "missing-data"):
             (application_dir / f"{kind}.md").write_text(
-                "SYNTHETIC — DEMO ONLY\n\n# application\n", encoding="utf-8"
+                "# application\n", encoding="utf-8"
             )
     return DeployConfig(**values)  # type: ignore[arg-type]
 
@@ -801,7 +801,7 @@ def test_wait_fails_when_application_processed_below_local_corpus_size(
         path.unlink()
     for index in range(5):
         (app_dir / f"credit-application-{index}.md").write_text(
-            "SYNTHETIC — DEMO ONLY\n\napp\n", encoding="utf-8"
+            "# application\n", encoding="utf-8"
         )
     rest = _script_happy_path(
         FakeRest(),
@@ -825,10 +825,10 @@ def test_deploy_blob_syncs_both_corpora_and_hash_skips(tmp_path: Path) -> None:
     policy_dir.mkdir(parents=True)
     app_dir.mkdir(parents=True)
     (policy_dir / "CP-RML-2026-01-residential-mortgage.md").write_text(
-        "SYNTHETIC — DEMO ONLY\n\npolicy\n", encoding="utf-8"
+        "# policy\n", encoding="utf-8"
     )
     (app_dir / "credit-application-CA-20260914-1789344000000.md").write_text(
-        "SYNTHETIC — DEMO ONLY\n\napp\n", encoding="utf-8"
+        "# application\n", encoding="utf-8"
     )
     stores = _stores()
     rest = _script_happy_path(FakeRest())

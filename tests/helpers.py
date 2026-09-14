@@ -100,11 +100,19 @@ def load_application_fixtures(root: Path | None = None) -> list[dict[str, Any]]:
     for item in iter_manifest_documents(manifest):
         path = base / str(item["filename"])
         record = parse_application_markdown(path.read_text(encoding="utf-8"))
-        slot = str(item.get("intended_outcome") or item.get("slot") or "")
+        slot = str(
+            item.get("expected_outcome")
+            or item.get("intended_outcome")
+            or item.get("slot")
+            or ""
+        )
         record["product_family"] = item.get("product_family")
         record["intended_outcome"] = item.get("intended_outcome") or slot
+        record["expected_outcome"] = item.get("expected_outcome") or slot
         record["application_type"] = slot
-        record["expected_judgement"] = item.get("intended_outcome") or slot
+        record["expected_judgement"] = (
+            item.get("expected_outcome") or item.get("intended_outcome") or slot
+        )
         record["filename"] = item.get("filename")
         records.append(record)
     return records

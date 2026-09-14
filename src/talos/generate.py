@@ -225,7 +225,6 @@ def blob_metadata(item: RenderedDocument) -> dict[str, str]:
         "content_sha256": item.content_sha256,
         "policy_id": item.document.id,
         "policy_version": item.document.version,
-        "synthetic": "true",
     }
 
 
@@ -256,7 +255,7 @@ def sync_markdown_directory(
             if existing is not None and existing.lower() == digest:
                 echo(f"{path.name}  blob={store.blob_url(path.name)}  skipped")
                 continue
-            metadata = {"content_sha256": digest, "synthetic": "true", **extra}
+            metadata = {"content_sha256": digest, **extra}
             url = store.upload_markdown(path.name, data, metadata)
             echo(f"{path.name}  blob={url}  uploaded")
             uploaded += 1
@@ -383,9 +382,8 @@ def load_and_validate_facts(path: Path) -> list[PolicyDocument]:
         raise TalosError("facts.yaml root must be a mapping", exit_code=3)
 
     errors: list[str] = []
-    watermark = data.get("watermark")
-    if watermark != WATERMARK:
-        errors.append(f"watermark must be {WATERMARK!r}, got {watermark!r}")
+    if "watermark" in data:
+        errors.append("facts.yaml must not set watermark")
 
     documents = data.get("documents")
     if not isinstance(documents, list) or not documents:
@@ -439,7 +437,6 @@ def build_manifest(
 ) -> dict[str, Any]:
     return {
         "generated_at": generated_at,
-        "watermark": WATERMARK,
         "container": container,
         "documents": [
             {
@@ -547,7 +544,7 @@ def _render_one(env: Environment, doc: PolicyDocument) -> RenderedDocument:
     template_name = f"{doc.filename}.j2"
     try:
         template = env.get_template(template_name)
-        markdown = template.render(doc=doc, facts=doc.facts, watermark=WATERMARK)
+        markdown = template.render(doc=doc, facts=doc.facts)
     except TemplateNotFound as exc:
         raise TalosError(
             f"Missing template {template_name}",
@@ -569,10 +566,16 @@ def _validate_renders(rendered: list[RenderedDocument]) -> None:
             errors.append(f"{item.document.id}: empty document")
             continue
         first = first_visible_line(text)
-        if first != WATERMARK:
+        expected_header = (
+            f"> Policy ID: {item.document.id} | Version: {item.document.version} "
+            f"| Effective: {item.document.effective_date}"
+        )
+        if first != expected_header:
             errors.append(
-                f"{item.document.id}: first visible line must be {WATERMARK!r}, got {first!r}"
+                f"{item.document.id}: first visible line must be {expected_header!r}, got {first!r}"
             )
+        if WATERMARK in text or "Not a real bank policy" in text:
+            errors.append(f"{item.document.id}: must not contain a synthetic warning")
         for key, value in item.document.facts.items():
             if value not in text:
                 errors.append(

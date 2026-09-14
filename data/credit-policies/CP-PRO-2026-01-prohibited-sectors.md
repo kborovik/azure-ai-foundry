@@ -1,6 +1,3 @@
-SYNTHETIC — DEMO ONLY
-
-> Not a real bank policy. Do not use for credit decisions.
 > Policy ID: CP-PRO-2026-01 | Version: 2026.1 | Effective: 2026-01-15
 
 # Prohibited Sectors Policy

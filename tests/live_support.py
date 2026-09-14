@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
+import random
 import re
 import sys
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -17,7 +20,7 @@ from talos.constants import (
 )
 from talos.env import repo_root
 from talos.rest import RestClient, RestResponse, raise_for_status
-from tests.helpers import APPLICATION_OUTPUT_RELATIVE
+from tests.helpers import APPLICATION_FIXTURES_RELATIVE, APPLICATION_OUTPUT_RELATIVE
 
 
 def search_url(env: dict[str, str], path: str) -> str:
@@ -131,33 +134,84 @@ def _response_output_text(payload: dict[str, Any]) -> str:
     return "\n".join(chunks)
 
 
-def application_cases() -> list[dict[str, Any]]:
-    live = repo_root() / APPLICATION_OUTPUT_RELATIVE
-    manifest_path = live / "manifest.json"
-    if not manifest_path.is_file() or not any(live.glob("credit-application-*.md")):
-        pytest.skip(
-            "no local data/client-applications/credit-application-*.md; "
-            "run `uv run talos generate application --all` first"
-        )
+def _cases_from_dir(base: Path) -> list[dict[str, Any]]:
     from talos.application import iter_manifest_documents
 
+    manifest_path = base / "manifest.json"
+    if not manifest_path.is_file():
+        return []
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     cases: list[dict[str, Any]] = []
     for item in iter_manifest_documents(manifest):
         filename = str(item.get("filename") or "")
-        path = live / filename
+        path = base / filename
         if not path.is_file():
             continue
         record = parse_application_markdown(path.read_text(encoding="utf-8"))
-        slot = str(item.get("intended_outcome") or item.get("slot") or "")
+        slot = str(
+            item.get("expected_outcome")
+            or item.get("intended_outcome")
+            or item.get("slot")
+            or ""
+        )
         record["product_family"] = item.get("product_family")
         record["intended_outcome"] = item.get("intended_outcome") or slot
+        record["expected_outcome"] = item.get("expected_outcome") or slot
         record["application_type"] = slot
-        record["expected_judgement"] = item.get("intended_outcome") or slot
+        record["expected_judgement"] = (
+            item.get("expected_outcome") or item.get("intended_outcome") or slot
+        )
         cases.append(record)
-    if not cases:
-        pytest.skip("application manifest has no readable slots")
     return cases
+
+
+def application_cases() -> list[dict[str, Any]]:
+    """Committed fixtures first, then gitignored generated filings.
+
+    `expected_outcome` / `intended_outcome` on the manifest is the QA label.
+    Live agent tests pick from this catalog rather than hardcoding serials.
+    """
+    root = repo_root()
+    cases = _cases_from_dir(root / APPLICATION_FIXTURES_RELATIVE)
+    seen = {str(item.get("application_id")) for item in cases}
+    for item in _cases_from_dir(root / APPLICATION_OUTPUT_RELATIVE):
+        application_id = str(item.get("application_id") or "")
+        if application_id and application_id not in seen:
+            cases.append(item)
+            seen.add(application_id)
+    if not cases:
+        pytest.skip(
+            "no application fixtures; expected "
+            f"{APPLICATION_FIXTURES_RELATIVE}/credit-application-*.md"
+        )
+    return cases
+
+
+def pick_application_case(application_type: str | None = None) -> dict[str, Any]:
+    pool = application_cases()
+    if application_type is not None:
+        pool = [
+            item for item in pool if item.get("application_type") == application_type
+        ]
+    if not pool:
+        pytest.skip(
+            "no application fixture"
+            + (f" of type {application_type}" if application_type else "")
+        )
+    raw_seed = os.environ.get("E2E_APPLICATION_SEED", "0")
+    try:
+        seed = int(raw_seed)
+    except ValueError:
+        seed = 0
+    return random.Random(seed).choice(pool)
+
+
+def expected_decision_token(expected_judgement: str) -> str:
+    if expected_judgement == "accepted":
+        return "accept"
+    if expected_judgement == "rejected":
+        return "reject"
+    return "missing"
 
 
 def knowledge_source_status(

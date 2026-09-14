@@ -36,6 +36,7 @@ from talos.constants import (
     PRODUCT_FAMILIES,
     PRODUCT_FAMILY_LABEL,
     PRODUCT_REQUIRED_DOCUMENTS,
+    PRODUCT_REQUIRED_FACTS,
     SLOT_PRODUCT_FAMILY,
     WATERMARK,
 )
@@ -81,14 +82,17 @@ IDENTITY_FIELD_BY_LABEL = {
     "phone": "phone",
 }
 JUDGEMENT_LEAK_RE = re.compile(
-    r"application_type|intended_outcome|expected_judgement|missing_items|"
+    r"application_type|intended_outcome|expected_outcome|expected_judgement|"
+    r"missing_items|"
     r"\bmissing-data\b|\bapplicationtype\b|"
     r"\baccepted\b|\brejected\b|\bapproved\b|\bdeclined\b|\bdenied\b",
     re.I,
 )
 FACILITY_NUMBER_RE = re.compile(r"(\d+(?:\.\d+)?)")
+ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 OPERATOR_RECORD_KEYS = (
     "application_type",
+    "expected_outcome",
     "expected_judgement",
     "intended_outcome",
     "missing_items",
@@ -254,6 +258,46 @@ def facility_limit_errors(
         errors.append(f"accepted facility must clear published limits; failed {failed}")
     if application_type == "rejected" and all(clears):
         errors.append("rejected facility must breach at least one published limit")
+    return errors
+
+
+def completeness_errors(
+    facility: dict[str, Any],
+    *,
+    application_type: str,
+    product_family: str,
+) -> list[str]:
+    """accepted/rejected filings must include every policy fact the agent checks."""
+    if application_type == "missing-data":
+        return []
+    errors: list[str] = []
+    for field in PRODUCT_REQUIRED_FACTS[product_family]:
+        raw = facility.get(field)
+        if raw in (None, ""):
+            errors.append(
+                f"facility.{field} is required for a complete {application_type} file"
+            )
+            continue
+        text = str(raw).strip()
+        if field.endswith("_date") and not ISO_DATE_RE.fullmatch(text):
+            errors.append(f"facility.{field} must be YYYY-MM-DD, got {raw!r}")
+        if field == "licensed_appraiser" and text.lower() not in {"yes", "no"}:
+            errors.append("facility.licensed_appraiser must be yes or no")
+    if (
+        application_type == "accepted"
+        and product_family == "residential_mortgage"
+        and not errors
+    ):
+        ltv = parse_facility_number(facility.get("ltv"))
+        loan = parse_facility_number(facility.get("loan_amount"))
+        avm_allowed = (
+            ltv is not None and ltv <= 60.0 and loan is not None and loan <= 400_000.0
+        )
+        licensed = str(facility.get("licensed_appraiser") or "").strip().lower()
+        if not avm_allowed and licensed != "yes":
+            errors.append(
+                "accepted residential above the AVM threshold needs licensed_appraiser yes"
+            )
     return errors
 
 
@@ -443,6 +487,57 @@ def iter_manifest_documents(manifest: dict[str, Any]) -> list[dict[str, Any]]:
     if isinstance(documents, list):
         return [item for item in documents if isinstance(item, dict)]
     return []
+
+
+def seed_application_fixtures(dest: Path, source: Path) -> int:
+    """Copy committed fixture markdown into dest and merge manifest rows.
+
+    Generated files already in dest are kept. Fixture rows win on the same
+    `application_id`. Returns the number of markdown files written.
+    """
+    if not source.is_dir():
+        return 0
+    dest.mkdir(parents=True, exist_ok=True)
+    source_manifest = read_application_manifest(source)
+    dest_data = read_application_manifest(dest)
+    dest_docs = dest_data.get("documents")
+    dest_map: dict[str, dict[str, Any]]
+    if isinstance(dest_docs, list):
+        dest_map = {}
+        for item in dest_docs:
+            if isinstance(item, dict) and item.get("application_id"):
+                dest_map[str(item["application_id"])] = item
+    elif isinstance(dest_docs, dict):
+        dest_map = {
+            str(key): dict(value)
+            for key, value in dest_docs.items()
+            if isinstance(value, dict)
+        }
+    else:
+        dest_map = {}
+    copied = 0
+    for item in iter_manifest_documents(source_manifest):
+        filename = str(item.get("filename") or "")
+        application_id = str(item.get("application_id") or "")
+        if not filename or not application_id:
+            continue
+        src_path = source / filename
+        if not src_path.is_file():
+            continue
+        dest_path = dest / filename
+        data = src_path.read_bytes()
+        if not dest_path.is_file() or dest_path.read_bytes() != data:
+            dest_path.write_bytes(data)
+            copied += 1
+        dest_map[application_id] = dict(item)
+    dest_data = dict(dest_data)
+    dest_data["documents"] = dest_map
+    dest_data.pop("watermark", None)
+    dest_data.setdefault("container", DEFAULT_APPLICATION_CONTAINER)
+    (dest / "manifest.json").write_text(
+        json.dumps(dest_data, indent=2) + "\n", encoding="utf-8"
+    )
+    return copied
 
 
 def filename_application_id(name: str) -> str | None:
@@ -662,6 +757,13 @@ def validate_record(
                 product_family=family,
             )
         )
+        errors.extend(
+            completeness_errors(
+                facility,
+                application_type=application_type,
+                product_family=family,
+            )
+        )
 
     attached = record.get("attached_documents")
     if not isinstance(attached, list) or not all(
@@ -813,6 +915,7 @@ def _manifest_row(
     return {
         "application_id": application_id,
         "intended_outcome": intended_outcome,
+        "expected_outcome": str(record.get("expected_outcome") or intended_outcome),
         "filename": filename,
         "blob_path": filename,
         "content_sha256": content_sha256,
@@ -853,7 +956,6 @@ def build_application_manifest(
         )
     return {
         "generated_at": generated_at,
-        "watermark": WATERMARK,
         "container": container,
         "documents": documents,
     }
@@ -885,7 +987,6 @@ def application_blob_metadata(item: RenderedApplication) -> dict[str, str]:
     return {
         "content_sha256": item.content_sha256,
         "application_id": str(item.record["application_id"]),
-        "synthetic": "true",
     }
 
 
@@ -1048,8 +1149,13 @@ def run_generate_application(
             item = render_application(record, paths.template, application_type=kind)
         intended = kind
         if forced_id and not config.types:
-            intended = str(previous.get("intended_outcome") or kind)
+            intended = str(
+                previous.get("expected_outcome")
+                or previous.get("intended_outcome")
+                or kind
+            )
         record["intended_outcome"] = intended
+        record["expected_outcome"] = intended
         record["_filename"] = item.filename
         record["content_sha256"] = item.content_sha256
         existing[application_id] = record
@@ -1121,15 +1227,26 @@ def _complete_one(
             record["product_family"] = product_family
             record["product"] = product_label
             record["attached_documents"] = list(attached_documents)
-            for leak_key in OPERATOR_RECORD_KEYS:
-                record.pop(leak_key, None)
-            errors = validate_record(
-                record,
-                application_type=application_type,
-                used=used,
-                required_id=application_id,
-                product_family=product_family,
+            expected = str(
+                record.get("expected_outcome") or record.get("intended_outcome") or ""
             )
+            if expected != application_type:
+                errors = [
+                    f"expected_outcome must be {application_type!r}, got {expected!r}"
+                ]
+            else:
+                for leak_key in OPERATOR_RECORD_KEYS:
+                    record.pop(leak_key, None)
+                errors = validate_record(
+                    record,
+                    application_type=application_type,
+                    used=used,
+                    required_id=application_id,
+                    product_family=product_family,
+                )
+                if not errors:
+                    record["expected_outcome"] = application_type
+                    record["intended_outcome"] = application_type
         except TalosError as exc:
             errors = [str(exc)]
             record = {}

@@ -16,7 +16,8 @@
     "product",
     "facility",
     "narrative",
-    "attached_documents"
+    "attached_documents",
+    "expected_outcome"
   ],
   "properties": {
     "application_id": {
@@ -44,8 +45,15 @@
         "dscr": { "type": "string" },
         "occupancy": { "type": "string" },
         "tenor_months": { "type": "string" },
-        "years_in_operation": { "type": "string" }
+        "years_in_operation": { "type": "string" },
+        "appraisal_date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "licensed_appraiser": { "type": "string" },
+        "valuation_date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
       }
+    },
+    "expected_outcome": {
+      "type": "string",
+      "enum": ["accepted", "rejected", "missing-data"]
     },
     "narrative": { "type": "string", "minLength": 40 },
     "attached_documents": {

@@ -20,6 +20,7 @@ from talos.application import (
     parse_application_markdown,
     parse_llm_json,
     run_generate_application,
+    seed_application_fixtures,
     strip_watermark_from_facts_yaml,
     validate_filing_markdown,
     validate_record,
@@ -97,12 +98,15 @@ def _valid_record(kind: str, **overrides: object) -> dict:
                 "dti": "36%",
                 "credit_score": "720",
                 "occupancy": "owner-occupied",
+                "appraisal_date": "2026-08-01",
+                "licensed_appraiser": "yes",
             },
             "rejected": {
                 "loan_amount": "USD 3,600,000",
                 "property_value": "USD 5,000,000",
                 "ltv": "72%",
                 "dscr": "1.10x",
+                "valuation_date": "2026-06-15",
             },
             "missing-data": {
                 "loan_amount": "USD 400,000",
@@ -110,8 +114,9 @@ def _valid_record(kind: str, **overrides: object) -> dict:
                 "tenor_months": "12",
             },
         }[kind],
-        "narrative": "I request this synthetic demo facility and list the documents I am submitting.",
+        "narrative": "I request this facility and list the documents I am submitting.",
         "attached_documents": list(attached),
+        "expected_outcome": kind,
     }
     record.update(overrides)
     return record
@@ -240,7 +245,9 @@ def test_generate_one_slot_writes_opaque_customer_filing(tmp_path: Path) -> None
         assert title in text
     assert "application_type" not in parsed
     assert "intended_outcome" not in parsed
+    assert "expected_outcome" not in parsed
     assert "expected_judgement" not in text
+    assert "expected_outcome" not in text
     assert "application_type" not in text
     assert "intended_outcome" not in text
     assert "missing-data" not in text
@@ -260,6 +267,7 @@ def test_generate_one_slot_writes_opaque_customer_filing(tmp_path: Path) -> None
     assert isinstance(documents, dict)
     row = documents[application_id]
     assert row["intended_outcome"] == "accepted"
+    assert row["expected_outcome"] == "accepted"
     assert row["filename"] == filename
     assert row["application_id"] == application_id
     assert "slot" not in row
@@ -300,6 +308,9 @@ def test_generate_all_writes_three_unique_identities_and_products(
     assert isinstance(documents, dict)
     outcomes = {doc["intended_outcome"] for doc in documents.values()}
     assert outcomes == set(APPLICATION_TYPES)
+    assert {doc["expected_outcome"] for doc in documents.values()} == set(
+        APPLICATION_TYPES
+    )
     for application_id, doc in documents.items():
         assert application_id == doc["application_id"]
         assert re.fullmatch(APPLICATION_ID_RE, doc["application_id"])
@@ -310,6 +321,7 @@ def test_generate_all_writes_three_unique_identities_and_products(
         assert (out / doc["filename"]).is_file()
         text = (out / doc["filename"]).read_text(encoding="utf-8")
         assert "intended_outcome" not in text
+        assert "expected_outcome" not in text
         assert "application_type" not in text
         assert "missing-data" not in text
         assert "--type" not in text
@@ -460,6 +472,7 @@ def test_force_application_id_keeps_serial(tmp_path: Path) -> None:
     assert "New Person" in text
     manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["documents"][serial]["intended_outcome"] == "accepted"
+    assert manifest["documents"][serial]["expected_outcome"] == "accepted"
     assert list(manifest["documents"]) == [serial]
 
 
@@ -509,7 +522,7 @@ def test_optional_blob_upload_hash_metadata(tmp_path: Path) -> None:
     blob = store.blobs[filename]
     assert blob.metadata["content_sha256"] == rendered[0].content_sha256
     assert blob.metadata["application_id"] == rendered[0].record["application_id"]
-    assert blob.metadata["synthetic"] == "true"
+    assert "synthetic" not in blob.metadata
     assert "application_type" not in blob.metadata
 
 
@@ -544,6 +557,7 @@ def test_fixtures_parse_and_cover_each_type() -> None:
         assert re.fullmatch(APPLICATION_ID_RE, str(record["application_id"]))
         assert not contains_forbidden_outcome_token(str(record["application_id"]))
         assert "intended_outcome" not in text
+        assert "expected_outcome" not in text
         assert "application_type" not in text
         assert "expected_judgement" not in text
         parsed = parse_application_markdown(text)
@@ -653,6 +667,37 @@ def test_validate_record_checks_facility_limits() -> None:
         product_family="commercial_real_estate",
     )
     assert any("breach at least one" in err for err in errors)
+
+
+def test_validate_record_requires_policy_facts_on_complete_files() -> None:
+    incomplete = _valid_record("accepted")
+    incomplete["facility"] = {
+        key: value
+        for key, value in incomplete["facility"].items()
+        if key not in {"appraisal_date", "licensed_appraiser"}
+    }
+    errors = validate_record(
+        incomplete,
+        application_type="accepted",
+        used=set(),
+        required_id=incomplete["application_id"],
+        product_family="residential_mortgage",
+    )
+    assert any("appraisal_date" in err for err in errors)
+
+
+def test_seed_application_fixtures_copies_gold_trio(tmp_path: Path) -> None:
+    dest = tmp_path / "apps"
+    copied = seed_application_fixtures(dest, FIXTURES)
+    assert copied == 3
+    manifest = json.loads((dest / "manifest.json").read_text(encoding="utf-8"))
+    documents = manifest["documents"]
+    assert documents["CA-20260115-1768478400000"]["expected_outcome"] == "accepted"
+    assert documents["CA-20260220-1771588800000"]["expected_outcome"] == "rejected"
+    assert documents["CA-20260325-1774440000000"]["expected_outcome"] == "missing-data"
+    assert (dest / "credit-application-CA-20260115-1768478400000.md").is_file()
+    again = seed_application_fixtures(dest, FIXTURES)
+    assert again == 0
 
 
 def test_parse_llm_json_strips_fence() -> None:
@@ -781,7 +826,7 @@ def test_generate_prompts_do_not_inject_disclaimer_phrases(tmp_path: Path) -> No
         assert phrase not in template
     assert "{{ watermark }}" not in user_src
     facts = FACTS.read_text(encoding="utf-8")
-    assert WATERMARK in facts
+    assert WATERMARK not in facts
     assert WATERMARK not in strip_watermark_from_facts_yaml(facts)
     completer = ScriptedCompleter([_valid_record("accepted")])
     run_generate_application(
@@ -1030,6 +1075,7 @@ def test_force_type_updates_intended_outcome(tmp_path: Path) -> None:
     )
     manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["documents"][serial]["intended_outcome"] == "rejected"
+    assert manifest["documents"][serial]["expected_outcome"] == "rejected"
     assert list(manifest["documents"]) == [serial]
 
 

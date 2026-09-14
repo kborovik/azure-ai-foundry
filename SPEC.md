@@ -2,11 +2,11 @@
 
 ## §G GOAL
 
-Demo Foundry prompt agent (1) answers credit-policy questions from 12 synthetic Markdown docs in Foundry IQ w/ citations (2) evaluates local synthetic client applications (`accepted`|`rejected`|`missing-data`) in Microsoft Teams 1:1 by `application_id` or `customer_name`, judgement grounded in named policy docs — not a production credit system.
+Demo Foundry prompt agent (1) answers credit-policy questions from 12 Contoso Demo Bank Markdown policies in Foundry IQ w/ citations (2) evaluates local client applications (`accepted`|`rejected`|`missing-data`) in Microsoft Teams 1:1 by `application_id` or `customer_name`, judgement grounded in named policy docs — not a production origination system.
 
 ## §C CONSTRAINTS
 
-- demo: synthetic evaluation only; no origination system-of-record; no real borrower PII; no real bank IP; no production credit decisioning; no document ACLs / Purview
+- demo: no origination system-of-record; no real borrower PII; no real bank IP; no production credit decisioning; no document ACLs / Purview
 - thin stack: Foundry Agent Service prompt agent + Foundry IQ + portal/REST Teams publish; hosted agents + Microsoft 365 Agents SDK = alternative not v1
 - Markdown-only corpus v1; no PDF
 - no multi-agent, no write-back to core banking
@@ -40,7 +40,7 @@ Demo Foundry prompt agent (1) answers credit-policy questions from 12 synthetic 
 ## §V INVARIANTS
 
 V1: grounded-only — agent factual claims ! from `knowledge_base_retrieve` output; judgements: thresholds from policy retrieve hits, application facts from application retrieve hits after id or name match; attached-docs list vs `CP-DOC-2026-01` + product required list; ! infer outcome from `application_id` or filename or `source_name`; never training-data LTV/DTI/DSCR/tenors/committees; empty policy retrieve → exact `That is not in the published policies.`
-V2: synthetic-demo — first visible line every policy `SYNTHETIC — DEMO ONLY`; generated application MD opens `# Credit application {application_id}` ! watermark anywhere in file ! YAML frontmatter; asked if real → disclose synthetic demo; no production credit decisioning; SyntheticBorrower ! real PII, ! real national-id formats
+V2: policy-docs — policy MD opens `> Policy ID:` then H1 title; ! `SYNTHETIC — DEMO ONLY`; ! "Not a real bank policy"; ! facts.yaml/manifest `watermark`; generated application MD opens `# Credit application {application_id}` ! watermark anywhere in file ! YAML frontmatter; treat retrieved docs as published Contoso Demo Bank policy; no production origination SoR; SyntheticBorrower ! real PII, ! real national-id formats
 V3: citation-id — every factual claim cites Learn glyph `【message_idx:search_idx†source_name】`; source_name = policy blob filename or original blob URL or `policy_id`; ! invent section headings as citation keys; judgement findings ! cite application blobs
 V4: stack-thin — v1 = Foundry prompt agent + Foundry IQ MCP project connection + portal/REST Teams publish; ! custom Microsoft 365 Agents SDK host; ! native knowledge tool; allowed_tools `["knowledge_base_retrieve"]`; KB `kb-credit-policies` lists two KS (`ks-credit-policies`, `ks-client-applications`); ! second KB, ! second MCP conn, ! second agent
 V5: corpus-shape — PolicyCorpus 12 Markdown files from `corpus/facts.yaml`; each fact value appears verbatim; uniqueness per fact key not numeric token (shared 55%/65%/90 days/12 months intentional); dual-write local+blob; commit generated policy MD. ApplicationCorpus unique files `data/client-applications/credit-application-{application_id}.md` keyed by ApplicationSerial; size = generated file count not 3; every successful generate appends; old files stay; gitignore `*.md` + `manifest.json`; ! commit generated applications; unit fixtures `tests/fixtures/client-applications/` new-format example ids

@@ -25,15 +25,13 @@ def test_retrieve_residential_ltv_from_policy(
 def test_retrieve_application_by_customer_name(
     live_env: dict[str, str], live_rest: Any
 ) -> None:
-    from tests.live_support import application_cases
+    from tests.live_support import pick_application_case
 
-    cases = application_cases()
-    if not cases:
-        pytest.skip("no application fixtures or local corpus")
-    name = str(cases[0]["customer_name"])
+    record = pick_application_case()
+    name = str(record["customer_name"])
     body = retrieve(live_rest, live_env, f"Find client application for {name}")
     blob = flatten_retrieve_text(body)
-    assert name.split()[0] in blob or str(cases[0]["application_id"]) in blob
+    assert name.split()[0] in blob or str(record["application_id"]) in blob
 
 
 def test_retrieval_golden_does_not_require_refusal_sentence() -> None:

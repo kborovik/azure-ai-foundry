@@ -74,19 +74,21 @@ def test_generate_local_only_writes_twelve_markdown_and_manifest(
         assert path.is_file(), path
         assert path.read_text(encoding="utf-8").strip()
     manifest = yaml.safe_load((out / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["watermark"] == WATERMARK
+    assert "watermark" not in manifest
     assert manifest["container"] == "credit-policies"
     assert {item["id"] for item in manifest["documents"]} == set(CORPUS_IDS)
     assert len(manifest["documents"]) == 12
 
 
-def test_watermark_is_first_visible_line(tmp_path: Path) -> None:
+def test_generated_policies_have_no_synthetic_watermark(tmp_path: Path) -> None:
     out = tmp_path / "credit-policies"
     result = CliRunner().invoke(cli, _generate_args(out))
     assert result.exit_code == 0, result.output
     for path in out.glob("*.md"):
         text = path.read_text(encoding="utf-8")
-        assert first_visible_line(text) == WATERMARK
+        assert WATERMARK not in text
+        assert "Not a real bank policy" not in text
+        assert first_visible_line(text).startswith("> Policy ID:")
 
 
 def test_fact_keys_are_unique_and_values_appear_verbatim(tmp_path: Path) -> None:
@@ -204,9 +206,9 @@ def test_dry_run_does_not_write(tmp_path: Path) -> None:
     assert not out.exists()
 
 
-def test_load_and_validate_facts_rejects_wrong_watermark(tmp_path: Path) -> None:
+def test_load_and_validate_facts_rejects_watermark(tmp_path: Path) -> None:
     data = yaml.safe_load(FACTS.read_text(encoding="utf-8"))
-    data["watermark"] = "DEMO"
+    data["watermark"] = WATERMARK
     path = tmp_path / "facts.yaml"
     path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
     with pytest.raises(TalosError) as exc:
@@ -303,7 +305,7 @@ def test_generate_dual_write_uploads_twelve_blobs(tmp_path: Path) -> None:
         assert blob.metadata["content_sha256"] == item.content_sha256
         assert blob.metadata["policy_id"] == item.document.id
         assert blob.metadata["policy_version"] == item.document.version
-        assert blob.metadata["synthetic"] == "true"
+        assert "synthetic" not in blob.metadata
         assert (out / item.document.filename).is_file()
 
 

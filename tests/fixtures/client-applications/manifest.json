@@ -1,10 +1,10 @@
 {
-  "watermark": "SYNTHETIC — DEMO ONLY",
   "container": "client-applications",
   "documents": {
     "CA-20260115-1768478400000": {
       "application_id": "CA-20260115-1768478400000",
       "intended_outcome": "accepted",
+      "expected_outcome": "accepted",
       "filename": "credit-application-CA-20260115-1768478400000.md",
       "customer_name": "Helene Voss",
       "customer_id": "SYN-104822",
@@ -13,6 +13,7 @@
     "CA-20260220-1771588800000": {
       "application_id": "CA-20260220-1771588800000",
       "intended_outcome": "rejected",
+      "expected_outcome": "rejected",
       "filename": "credit-application-CA-20260220-1771588800000.md",
       "customer_name": "Bram Cotter",
       "customer_id": "SYN-209331",
@@ -21,6 +22,7 @@
     "CA-20260325-1774440000000": {
       "application_id": "CA-20260325-1774440000000",
       "intended_outcome": "missing-data",
+      "expected_outcome": "missing-data",
       "filename": "credit-application-CA-20260325-1774440000000.md",
       "customer_name": "Nia Pell",
       "customer_id": "SYN-318704",
