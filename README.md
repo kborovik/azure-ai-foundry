@@ -46,7 +46,7 @@ gmake ai-account             # live Foundry account + model deployments
 gmake ai-project             # live Foundry project
 gmake ai-agent               # live prompt agent
 gmake ai-search              # live Azure AI Search
-gmake ai-storage             # live Storage account + containers
+gmake ai-storage             # live Storage account + containers + blobs
 gmake infra-destroy ENV=dev1
 gmake infra-backend-destroy  # drops the tfstate account
 ```
