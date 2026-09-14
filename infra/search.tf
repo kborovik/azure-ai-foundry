@@ -1,5 +1,5 @@
 resource "azurerm_search_service" "search" {
-  name                          = local.search_name
+  name                          = "credit-policy-lab5"
   resource_group_name           = azurerm_resource_group.rg.name
   location                      = azurerm_resource_group.rg.location
   sku                           = "basic"

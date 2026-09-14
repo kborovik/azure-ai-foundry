@@ -1,10 +1,10 @@
 resource "azurerm_cognitive_account" "foundry" {
-  name                          = local.foundry_name
+  name                          = "credit-policy-lab5"
   resource_group_name           = azurerm_resource_group.rg.name
   location                      = azurerm_resource_group.rg.location
   kind                          = "AIServices"
   sku_name                      = "S0"
-  custom_subdomain_name         = local.foundry_name
+  custom_subdomain_name         = "credit-policy-lab5"
   project_management_enabled    = true
   public_network_access_enabled = true
   local_auth_enabled            = true
@@ -16,10 +16,10 @@ resource "azurerm_cognitive_account" "foundry" {
 }
 
 resource "azurerm_cognitive_account_project" "project" {
-  name                 = local.project_name
+  name                 = "credit-policy-demo"
   cognitive_account_id = azurerm_cognitive_account.foundry.id
   location             = azurerm_resource_group.rg.location
-  display_name         = local.project_name
+  display_name         = "credit-policy-demo"
   description          = "Contoso Demo Bank credit policy agent"
   tags                 = local.tags
 
@@ -29,7 +29,7 @@ resource "azurerm_cognitive_account_project" "project" {
 }
 
 resource "azurerm_cognitive_deployment" "chat" {
-  name                 = local.chat_deployment_name
+  name                 = "gpt-5-mini"
   cognitive_account_id = azurerm_cognitive_account.foundry.id
 
   model {
@@ -40,12 +40,12 @@ resource "azurerm_cognitive_deployment" "chat" {
 
   sku {
     name     = "GlobalStandard"
-    capacity = local.chat_capacity
+    capacity = 50
   }
 }
 
 resource "azurerm_cognitive_deployment" "embedding" {
-  name                 = local.embedding_deployment_name
+  name                 = "text-embedding-3-large"
   cognitive_account_id = azurerm_cognitive_account.foundry.id
 
   model {
@@ -56,7 +56,7 @@ resource "azurerm_cognitive_deployment" "embedding" {
 
   sku {
     name     = "Standard"
-    capacity = local.embedding_capacity
+    capacity = 20
   }
 
   depends_on = [azurerm_cognitive_deployment.chat]

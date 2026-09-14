@@ -37,29 +37,29 @@ resource "azurerm_role_assignment" "project_reads_search" {
 resource "azurerm_role_assignment" "operator_blob_contributor" {
   scope              = azurerm_storage_account.storage.id
   role_definition_id = "${local.role_definition_prefix}/${local.storage_blob_data_contributor}"
-  principal_id       = local.operator_principal_id
+  principal_id       = data.azurerm_client_config.current.object_id
 }
 
 resource "azurerm_role_assignment" "operator_search_contributor" {
   scope              = azurerm_search_service.search.id
   role_definition_id = "${local.role_definition_prefix}/${local.search_service_contributor}"
-  principal_id       = local.operator_principal_id
+  principal_id       = data.azurerm_client_config.current.object_id
 }
 
 resource "azurerm_role_assignment" "operator_search_index_contributor" {
   scope              = azurerm_search_service.search.id
   role_definition_id = "${local.role_definition_prefix}/${local.search_index_data_contributor}"
-  principal_id       = local.operator_principal_id
+  principal_id       = data.azurerm_client_config.current.object_id
 }
 
 resource "azurerm_role_assignment" "operator_foundry_user" {
   scope              = azurerm_cognitive_account.foundry.id
   role_definition_id = "${local.role_definition_prefix}/${local.foundry_user}"
-  principal_id       = local.operator_principal_id
+  principal_id       = data.azurerm_client_config.current.object_id
 }
 
 resource "azurerm_role_assignment" "operator_foundry_project_manager" {
   scope              = azurerm_cognitive_account_project.project.id
   role_definition_id = "${local.role_definition_prefix}/${local.foundry_project_manager}"
-  principal_id       = local.operator_principal_id
+  principal_id       = data.azurerm_client_config.current.object_id
 }

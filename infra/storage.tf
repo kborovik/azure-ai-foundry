@@ -1,5 +1,5 @@
 resource "azurerm_storage_account" "storage" {
-  name                            = local.storage_name
+  name                            = "lab5stcp1"
   resource_group_name             = azurerm_resource_group.rg.name
   location                        = azurerm_resource_group.rg.location
   account_kind                    = "StorageV2"
