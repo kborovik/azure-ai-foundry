@@ -93,14 +93,18 @@ preflight: .venv
 	terraform version
 
 # `gmake e2e FILE=<path-or-stem>` scopes to one test file; unset = live markers.
+# Prereq order is the live chain: unit check, az/terraform, apply, mint apps,
+# blob-sync+index+agent, then pytest. `deploy` also depends on `infra-create`;
+# GNU make builds that once per invocation. Not safe under `make -j`.
 e2e_target := $(if $(FILE),$(firstword $(wildcard $(FILE) tests/$(FILE) tests/$(FILE).py)),)
 ifneq ($(filter e2e,$(MAKECMDGOALS)),)
 $(if $(FILE),$(if $(e2e_target),,$(error no test file matches FILE=$(FILE))))
 endif
 
-e2e: check preflight ## Live pytest vs terraform outputs (ingestion / retrieval / agent)
+e2e: check preflight infra-create generate deploy ## infra-create + generate + deploy --wait + live pytest
 	$(call header,Live e2e)
-	$(UV) run pytest -m "ingestion or retrieval or agent" --override-ini addopts= $(e2e_target)
+	$(UV) run pytest -v -ra -s --durations=0 \
+		-m "ingestion or retrieval or agent" --override-ini addopts= $(e2e_target)
 
 clean: ## Remove caches, build artifacts, and bytecode
 	$(call header,Cleaning)
