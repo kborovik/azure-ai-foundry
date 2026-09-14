@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.2.0] - 2026-09-14
+
 ### Fixed
 
 - **`talos publish`:** POST `/microsoft365/publish` now sends `developerWebsiteUrl`, `privacyUrl`, and `termsOfUseUrl` (HTTPS). Foundry 400s without them (`DeveloperWebsiteUrl must be a valid HTTPS URL`). Defaults match the Microsoft sample; override with `--developer-website-url`, `--privacy-url`, `--terms-of-use-url`. Invalid URLs fail locally before the request.
@@ -43,3 +45,4 @@
 - **Talos CLI:** Click package `talos` (`uv run talos generate` / `talos deploy` / `talos publish`) renders the synthetic corpus and provisions Foundry IQ. Unit tests run via `gmake test` → `uv run pytest`. GitHub Actions deploy runs on `release: published`.
 - **Corpus generator:** `uv run talos generate --local-only` writes 12 watermarked Markdown policies plus `manifest.json` from `corpus/facts.yaml`.
 - **`gmake` recipes:** local `test`, `check`, `generate`, `deploy`, `e2e`, and `gmake release major|minor|patch` (bump, tag, `gh release create`).
+
