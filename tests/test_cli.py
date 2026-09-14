@@ -32,6 +32,7 @@ def test_root_help_lists_generate_deploy_and_publish() -> None:
     assert "generate" in result.output
     assert "deploy" in result.output
     assert "publish" in result.output
+    assert "--completion" in result.output
     missing = CliRunner().invoke(cli, ["test"])
     assert missing.exit_code != 0
     assert "No such command" in missing.output
@@ -222,3 +223,30 @@ def test_gha_unit_workflow_calls_pytest() -> None:
     assert "uv python install 3.14" in text
     assert "uv run pytest" in text
     assert "talos test" not in text
+
+
+def test_completion_emits_click_source_for_supported_shells() -> None:
+    runner = CliRunner()
+    expected = {
+        "bash": "_TALOS_COMPLETE",
+        "zsh": "_TALOS_COMPLETE",
+        "fish": "complete --no-files --command talos",
+        "powershell": "_TALOS_COMPLETE",
+    }
+    for shell, marker in expected.items():
+        result = runner.invoke(cli, ["--completion", shell])
+        assert result.exit_code == 0, result.output
+        assert marker in result.output
+        assert "talos" in result.output
+
+
+def test_completion_unknown_shell_is_usage_error() -> None:
+    result = CliRunner().invoke(cli, ["--completion", "nushell"])
+    assert result.exit_code != 0
+    assert "Invalid value" in result.output or "invalid choice" in result.output.lower()
+
+
+def test_completion_is_not_a_subcommand() -> None:
+    result = CliRunner().invoke(cli, ["completion"])
+    assert result.exit_code != 0
+    assert "No such command" in result.output

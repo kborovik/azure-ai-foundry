@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import click
+from click.shell_completion import get_completion_class
 
 from talos import __version__
 from talos.constants import (
@@ -31,8 +32,36 @@ from talos.errors import TalosError
 from talos.generate import GenerateConfig, run_generate
 from talos.provision import DeployConfig, run_deploy
 
+_COMPLETION_SHELLS = ("bash", "zsh", "fish", "powershell")
+
+
+def _emit_completion(
+    ctx: click.Context, _param: click.Parameter, value: str | None
+) -> None:
+    if not value or ctx.resilient_parsing:
+        return
+    complete_cls = get_completion_class(value.lower())
+    if complete_cls is None:
+        raise SystemExit(2)
+    script = complete_cls(
+        cli=ctx.command,
+        ctx_args={},
+        prog_name="talos",
+        complete_var="_TALOS_COMPLETE",
+    ).source()
+    click.echo(script, nl=not script.endswith("\n"))
+    ctx.exit()
+
 
 @click.group()
+@click.option(
+    "--completion",
+    type=click.Choice(_COMPLETION_SHELLS, case_sensitive=False),
+    callback=_emit_completion,
+    expose_value=False,
+    is_eager=True,
+    help="Print a completion script for SHELL and exit.",
+)
 @click.version_option(version=__version__, prog_name="talos")
 def cli() -> None:
     """Generate, deploy, and publish the credit-policy agent on Microsoft Foundry."""
