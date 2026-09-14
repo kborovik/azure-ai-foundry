@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.2.1] - 2026-09-14
+
 ### Fixed
 
 - **`--version` test:** assert the installed package version, not a hardcoded `0.1.0`. The hardcoded pin failed CI on the v0.2.0 tag after `gmake release` bumped the version.
