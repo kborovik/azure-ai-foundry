@@ -53,7 +53,7 @@ def test_runbook_documents_just_you_and_sideload() -> None:
         "talos publish",
         "publishScope",
         "hosted-agents.md",
-        "CA-2026-000001",
+        "CA-20260914-1789344000000",
         "manifest.json",
     ):
         assert needle in text, needle

@@ -262,6 +262,12 @@ def knowledge_base_body(config: DeployConfig) -> dict[str, Any]:
     }
 
 
+def local_corpus_size(directory: Path) -> int:
+    if not directory.is_dir():
+        return 0
+    return len(list(directory.glob("*.md")))
+
+
 def deploy_sources(
     config: DeployConfig,
 ) -> tuple[BlobKnowledgeSource, BlobKnowledgeSource]:
@@ -283,7 +289,7 @@ def deploy_sources(
             container=config.application_container,
             description=KS_APPLICATION_DESCRIPTION,
             local_dir=application_dir,
-            min_indexed_items=config.min_application_indexed_items,
+            min_indexed_items=local_corpus_size(application_dir),
         ),
     )
 

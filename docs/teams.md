@@ -57,12 +57,12 @@ Also confirm:
 
 ## Evaluation prompts
 
-Identify an application by `application_id` or `customer_name` only. Type nicknames (`accepted`, `rejected`, `missing-data`) are not identifiers. Copy `application_id` from the generated filing or gitignored `data/client-applications/manifest.json`. A fresh `--all` generate starts at `CA-YYYY-000001`.
+Identify an application by `application_id` or `customer_name` only. Type nicknames (`accepted`, `rejected`, `missing-data`) are not identifiers. Copy `application_id` from the generated filing or gitignored `data/client-applications/manifest.json`. Each generate mints a unique `CA-{YYYYMMDD}-{unix_ms}` serial.
 
 **Evaluate by id**
 
 ```
-Evaluate application CA-2026-000001 against published credit policy.
+Evaluate application CA-20260914-1789344000000 against published credit policy.
 ```
 
 **Evaluate by name**

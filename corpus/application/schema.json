@@ -21,7 +21,7 @@
   "properties": {
     "application_id": {
       "type": "string",
-      "pattern": "^CA-[0-9]{4}-[0-9]{6}$"
+      "pattern": "^CA-[0-9]{8}-[0-9]+$"
     },
     "customer_name": { "type": "string", "minLength": 3 },
     "customer_id": { "type": "string", "pattern": "^SYN-[0-9]{6}$" },

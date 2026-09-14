@@ -90,18 +90,17 @@ def policies_dir(root: Path | None = None) -> Path:
 
 
 def load_application_fixtures(root: Path | None = None) -> list[dict[str, Any]]:
-    from talos.application import parse_application_markdown
+    from talos.application import iter_manifest_documents, parse_application_markdown
 
     base = (root or repo_root()) / APPLICATION_FIXTURES_RELATIVE
     manifest_path = base / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
     records: list[dict[str, Any]] = []
-    for item in manifest.get("documents") or []:
-        if not isinstance(item, dict):
-            raise TypeError("fixture manifest documents must be mappings")
+    for item in iter_manifest_documents(manifest):
         path = base / str(item["filename"])
         record = parse_application_markdown(path.read_text(encoding="utf-8"))
-        slot = str(item.get("slot") or item.get("intended_outcome") or "")
+        slot = str(item.get("intended_outcome") or item.get("slot") or "")
         record["product_family"] = item.get("product_family")
         record["intended_outcome"] = item.get("intended_outcome") or slot
         record["application_type"] = slot

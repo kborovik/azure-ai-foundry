@@ -6,7 +6,7 @@ A Foundry Agent Service prompt agent that answers credit-policy questions from a
 
 Relationship managers and credit officers need a cited answer to questions such as “what is max LTV on an investment property?” during a live deal. Today that means paging through policy PDFs. Generic chat models invent LTV, DTI, and committee names.
 
-This repository is a **demo**, not a production credit system. It shows a Foundry Agent Service prompt agent grounded on a Foundry IQ knowledge base. The source of truth is twelve synthetic bank credit-policy Markdown files plus three gitignored synthetic client applications in Azure Blob Storage. End users chat with the agent in Microsoft Teams 1:1 for policy questions and application evaluation by `application_id` or `customer_name`.
+This repository is a **demo**, not a production credit system. It shows a Foundry Agent Service prompt agent grounded on a Foundry IQ knowledge base. The source of truth is twelve synthetic bank credit-policy Markdown files plus gitignored synthetic client applications in Azure Blob Storage. End users chat with the agent in Microsoft Teams 1:1 for policy questions and application evaluation by `application_id` or `customer_name`.
 
 ## Runtime Sequence
 
@@ -92,7 +92,7 @@ gmake test                                    # unit pytest (marker unit)
 gmake check                                   # ruff + unit tests
 ```
 
-`talos generate` is a Click group. `talos generate policy` renders the committed 12 policy files and does not run deploy. `talos generate application` calls Foundry `gpt-5-mini` for a unique SyntheticBorrower (`--type` or `--all`; `--force` to overwrite a slot). Files are `credit-application-{application_id}.md` with opaque ids `CA-YYYY-NNNNNN`. Intended outcome lives in gitignored `manifest.json` only. Generated applications under `data/client-applications/` are gitignored. `talos deploy` hash-skips blob upload of both local corpora, PUTs `ks-credit-policies` and `ks-client-applications`, runs both indexers, and PUTs `kb-credit-policies` with both sources.
+`talos generate` is a Click group. `talos generate policy` renders the committed 12 policy files and does not run deploy. `talos generate application` calls Foundry `gpt-5-mini` for a unique SyntheticBorrower (`--type` or `--all`; `--count N` mints N serials per type; `--force --application-id` regenerates a named serial). Files are `credit-application-{application_id}.md` with opaque ids `CA-{YYYYMMDD}-{unix_ms}`. Intended outcome lives in gitignored `manifest.json` keyed by `application_id`. Generated applications under `data/client-applications/` are gitignored. `talos deploy` hash-skips blob upload of both local corpora, PUTs `ks-credit-policies` and `ks-client-applications`, runs both indexers, and PUTs `kb-credit-policies` with both sources. `--wait` requires application processed ≥ local corpus size.
 
 Teams publish is Just you (`BotServiceRbac`). Portal Direct publish or optional `uv run talos publish` (REST). Sideload is the fallback. See [docs/teams.md](docs/teams.md). Hosted agents and a custom Microsoft 365 Agents SDK host are not v1; see [docs/hosted-agents.md](docs/hosted-agents.md).
 

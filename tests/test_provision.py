@@ -659,14 +659,27 @@ def test_wait_fails_when_application_processed_below_minimum(tmp_path: Path) -> 
         )
 
 
-def test_wait_fails_when_local_application_corpus_short(tmp_path: Path) -> None:
+def test_wait_fails_when_application_processed_below_local_corpus_size(
+    tmp_path: Path,
+) -> None:
     config = _config(tmp_path, wait=True)
-    for path in Path(config.application_dir).glob("*.md"):
+    app_dir = Path(config.application_dir)
+    for path in app_dir.glob("*.md"):
         path.unlink()
-    with pytest.raises(TalosError, match="markdown files"):
+    for index in range(5):
+        (app_dir / f"credit-application-{index}.md").write_text(
+            "SYNTHETIC — DEMO ONLY\n\napp\n", encoding="utf-8"
+        )
+    rest = _script_happy_path(
+        FakeRest(),
+        wait=True,
+        application_status=_done_status(processed=4, failed=0),
+    )
+    _script_index_count(rest, "ks-client-applications", "idx-client-applications", 4)
+    with pytest.raises(TalosError, match="processed 4 items"):
         do_deploy(
             config,
-            rest=FakeRest(),
+            rest=rest,
             agents=FakeAgents(),
             clock=FakeClock(),
             echo=lambda _: None,
@@ -681,7 +694,7 @@ def test_deploy_blob_syncs_both_corpora_and_hash_skips(tmp_path: Path) -> None:
     (policy_dir / "CP-RML-2026-01-residential-mortgage.md").write_text(
         "SYNTHETIC — DEMO ONLY\n\npolicy\n", encoding="utf-8"
     )
-    (app_dir / "credit-application-CA-2026-000001.md").write_text(
+    (app_dir / "credit-application-CA-20260914-1789344000000.md").write_text(
         "SYNTHETIC — DEMO ONLY\n\napp\n", encoding="utf-8"
     )
     stores = _stores()
@@ -690,7 +703,8 @@ def test_deploy_blob_syncs_both_corpora_and_hash_skips(tmp_path: Path) -> None:
     do_deploy(config, rest=rest, blob_stores=stores, echo=lambda _: None)
     assert "CP-RML-2026-01-residential-mortgage.md" in stores["credit-policies"].uploads
     assert (
-        "credit-application-CA-2026-000001.md" in stores["client-applications"].uploads
+        "credit-application-CA-20260914-1789344000000.md"
+        in stores["client-applications"].uploads
     )
     stores["credit-policies"].uploads.clear()
     stores["client-applications"].uploads.clear()

@@ -68,7 +68,7 @@ REQUIRED_JSON_KEYS = (
 REQUIRED_FACILITY_KEYS = ("loan_amount",)
 SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 NATIONAL_ID_RE = re.compile(r"\b\d{6}[- ]\d{4}\b")
-CREDIT_APPLICATION_HEADING_RE = re.compile(r"^# Credit application (CA-\d{4}-\d{6})$")
+CREDIT_APPLICATION_HEADING_RE = re.compile(r"^# Credit application (CA-\d{8}-\d+)$")
 IDENTITY_FIELD_BY_LABEL = {
     "name": "customer_name",
     "customer id": "customer_id",
@@ -112,6 +112,8 @@ class ApplicationGenerateConfig:
     system_prompt_path: Path | None = None
     user_prompt_path: Path | None = None
     template_path: Path | None = None
+    count: int = 1
+    application_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -170,7 +172,7 @@ class FoundryChatCompleter:
 def application_filename(application_id: str) -> str:
     if not re.fullmatch(APPLICATION_ID_RE, application_id):
         raise TalosError(
-            f"application_id {application_id!r} is not CA-YYYY-NNNNNN",
+            f"application_id {application_id!r} is not CA-YYYYMMDD-unix_ms",
             exit_code=1,
         )
     return APPLICATION_FILENAME_TEMPLATE.format(application_id=application_id)
@@ -333,7 +335,7 @@ def parse_application_markdown(text: str) -> dict[str, Any]:
     heading = CREDIT_APPLICATION_HEADING_RE.fullmatch(first)
     if heading is None:
         raise TalosError(
-            "first visible line must be '# Credit application CA-YYYY-NNNNNN', "
+            "first visible line must be '# Credit application CA-YYYYMMDD-unix_ms', "
             f"got {first!r}",
             exit_code=1,
         )
@@ -378,21 +380,43 @@ def read_application_manifest(out: Path) -> dict[str, Any]:
             f"application manifest {path} root must be a mapping", exit_code=1
         )
     documents = data.get("documents")
-    if not isinstance(documents, list):
+    if not isinstance(documents, (list, dict)):
         data = dict(data)
-        data["documents"] = []
+        data["documents"] = {}
     return data
 
 
-def load_existing_slots(out: Path) -> dict[str, dict[str, Any]]:
-    slots: dict[str, dict[str, Any]] = {}
+def iter_manifest_documents(manifest: dict[str, Any]) -> list[dict[str, Any]]:
+    documents = manifest.get("documents")
+    if isinstance(documents, dict):
+        rows: list[dict[str, Any]] = []
+        for key, item in documents.items():
+            if not isinstance(item, dict):
+                continue
+            row = dict(item)
+            row.setdefault("application_id", key)
+            rows.append(row)
+        return rows
+    if isinstance(documents, list):
+        return [item for item in documents if isinstance(item, dict)]
+    return []
+
+
+def filename_application_id(name: str) -> str | None:
+    prefix = "credit-application-"
+    suffix = ".md"
+    if not name.startswith(prefix) or not name.endswith(suffix):
+        return None
+    candidate = name[len(prefix) : -len(suffix)]
+    if re.fullmatch(APPLICATION_ID_RE, candidate):
+        return candidate
+    return None
+
+
+def load_existing_applications(out: Path) -> dict[str, dict[str, Any]]:
+    records: dict[str, dict[str, Any]] = {}
     manifest = read_application_manifest(out)
-    for item in manifest.get("documents") or []:
-        if not isinstance(item, dict):
-            continue
-        slot = str(item.get("slot") or item.get("intended_outcome") or "")
-        if slot not in APPLICATION_TYPES:
-            continue
+    for item in iter_manifest_documents(manifest):
         application_id = str(item.get("application_id") or "")
         filename = str(item.get("filename") or "")
         if not filename and re.fullmatch(APPLICATION_ID_RE, application_id):
@@ -405,26 +429,25 @@ def load_existing_slots(out: Path) -> dict[str, dict[str, Any]]:
                 record = {**parsed, **item}
             except TalosError:
                 pass
-        record["application_type"] = slot
-        record["intended_outcome"] = str(item.get("intended_outcome") or slot)
+        intended = str(item.get("intended_outcome") or item.get("slot") or "")
+        record["intended_outcome"] = intended
+        record["application_type"] = intended
         if filename:
             record["_filename"] = filename
-        slots[slot] = record
-    for kind in APPLICATION_TYPES:
-        if kind in slots:
-            continue
-        path = out / f"{kind}.md"
-        if not path.is_file():
-            continue
-        try:
-            record = parse_application_markdown(path.read_text(encoding="utf-8"))
-        except TalosError:
-            record = {}
-        record["application_type"] = kind
-        record["intended_outcome"] = kind
-        record["_filename"] = path.name
-        slots[kind] = record
-    return slots
+        if application_id:
+            records[application_id] = record
+    if out.is_dir():
+        for path in out.glob("credit-application-*.md"):
+            application_id = filename_application_id(path.name)
+            if not application_id or application_id in records:
+                continue
+            try:
+                record = parse_application_markdown(path.read_text(encoding="utf-8"))
+            except TalosError:
+                continue
+            record["_filename"] = path.name
+            records[application_id] = record
+    return records
 
 
 def identity_keys(record: dict[str, Any]) -> set[str]:
@@ -445,13 +468,13 @@ def identity_keys(record: dict[str, Any]) -> set[str]:
 def used_identities(
     existing: dict[str, dict[str, Any]],
     *,
-    replacing: tuple[str, ...],
+    replacing: set[str] | tuple[str, ...] = (),
     pending: list[dict[str, Any]] | None = None,
 ) -> set[str]:
     used: set[str] = set()
     skip = set(replacing)
-    for kind, record in existing.items():
-        if kind in skip:
+    for key, record in existing.items():
+        if key in skip or str(record.get("application_id") or "") in skip:
             continue
         used |= identity_keys(record)
     for record in pending or []:
@@ -459,13 +482,80 @@ def used_identities(
     return used
 
 
-def allocate_application_id(used: set[str], *, year: int | None = None) -> str:
-    year_value = year if year is not None else datetime.now(timezone.utc).year
-    for number in range(1, 1_000_000):
-        candidate = f"CA-{year_value}-{number:06d}"
-        if candidate not in used and not contains_forbidden_outcome_token(candidate):
-            return candidate
-    raise TalosError("no free application_id in CA-YYYY-NNNNNN space", exit_code=1)
+def collect_used_serials(out: Path, existing: dict[str, dict[str, Any]]) -> set[str]:
+    used = set(existing)
+    for record in existing.values():
+        application_id = str(record.get("application_id") or "")
+        if application_id:
+            used.add(application_id)
+        filename = str(record.get("_filename") or record.get("filename") or "")
+        from_name = filename_application_id(filename)
+        if from_name:
+            used.add(from_name)
+    if out.is_dir():
+        for path in out.glob("credit-application-*.md"):
+            from_name = filename_application_id(path.name)
+            if from_name:
+                used.add(from_name)
+    return used
+
+
+class SerialAllocator:
+    """Keep the peeked timestamp; bump unix_ms only when that serial is taken."""
+
+    def __init__(
+        self,
+        used: set[str] | None = None,
+        *,
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
+        self._used = set(used or ())
+        self._clock = clock or (lambda: datetime.now(timezone.utc))
+
+    def peek(self) -> str:
+        return self._next_serial(consume=False)
+
+    def mint(self, peeked: str | None = None) -> str:
+        if (
+            peeked
+            and peeked not in self._used
+            and not contains_forbidden_outcome_token(peeked)
+            and re.fullmatch(APPLICATION_ID_RE, peeked)
+        ):
+            self._used.add(peeked)
+            return peeked
+        return self._next_serial(consume=True)
+
+    def release(self, serial: str) -> None:
+        self._used.discard(serial)
+
+    def _next_serial(self, *, consume: bool) -> str:
+        now = self._clock()
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
+        else:
+            now = now.astimezone(timezone.utc)
+        date = now.strftime("%Y%m%d")
+        ms = int(now.timestamp() * 1000)
+        while True:
+            candidate = f"CA-{date}-{ms}"
+            if candidate not in self._used and not contains_forbidden_outcome_token(
+                candidate
+            ):
+                if consume:
+                    self._used.add(candidate)
+                return candidate
+            ms += 1
+
+
+def allocate_application_id(
+    used: set[str],
+    *,
+    now: datetime | None = None,
+    clock: Callable[[], datetime] | None = None,
+) -> str:
+    frozen = (lambda: now) if now is not None else clock
+    return SerialAllocator(used=set(used), clock=frozen).mint()
 
 
 def allocate_customer_id(used: set[str]) -> str:
@@ -494,7 +584,7 @@ def validate_record(
     if application_id != required_id:
         errors.append(f"application_id must be {required_id!r}, got {application_id!r}")
     if not re.fullmatch(APPLICATION_ID_RE, application_id):
-        errors.append(f"application_id {application_id!r} is not CA-YYYY-NNNNNN")
+        errors.append(f"application_id {application_id!r} is not CA-YYYYMMDD-unix_ms")
     if contains_forbidden_outcome_token(application_id):
         errors.append(
             f"application_id {application_id!r} contains a forbidden outcome token"
@@ -651,6 +741,26 @@ def render_application(
     )
 
 
+def _manifest_row(
+    record: dict[str, Any],
+    *,
+    filename: str,
+    content_sha256: str | None,
+    intended_outcome: str,
+) -> dict[str, Any]:
+    application_id = str(record.get("application_id") or "")
+    return {
+        "application_id": application_id,
+        "intended_outcome": intended_outcome,
+        "filename": filename,
+        "blob_path": filename,
+        "content_sha256": content_sha256,
+        "customer_name": record.get("customer_name"),
+        "customer_id": record.get("customer_id"),
+        "product_family": record.get("product_family"),
+    }
+
+
 def build_application_manifest(
     existing: dict[str, dict[str, Any]],
     rendered: list[RenderedApplication],
@@ -658,39 +768,28 @@ def build_application_manifest(
     generated_at: str,
     container: str,
 ) -> dict[str, Any]:
-    by_slot: dict[str, dict[str, Any]] = {}
-    for slot, record in existing.items():
-        if slot not in APPLICATION_TYPES:
-            continue
-        application_id = str(record.get("application_id") or "")
+    documents: dict[str, dict[str, Any]] = {}
+    for application_id, record in existing.items():
         filename = str(record.get("_filename") or record.get("filename") or "")
         if not filename and re.fullmatch(APPLICATION_ID_RE, application_id):
             filename = application_filename(application_id)
-        by_slot[slot] = {
-            "slot": slot,
-            "application_id": application_id,
-            "intended_outcome": str(record.get("intended_outcome") or slot),
-            "filename": filename,
-            "blob_path": filename,
-            "content_sha256": record.get("content_sha256"),
-            "customer_name": record.get("customer_name"),
-            "customer_id": record.get("customer_id"),
-            "product_family": record.get("product_family"),
-        }
+        documents[application_id] = _manifest_row(
+            record,
+            filename=filename,
+            content_sha256=record.get("content_sha256"),
+            intended_outcome=str(
+                record.get("intended_outcome") or record.get("application_type") or ""
+            ),
+        )
     for item in rendered:
         application_id = str(item.record["application_id"])
-        by_slot[item.application_type] = {
-            "slot": item.application_type,
-            "application_id": application_id,
-            "intended_outcome": item.application_type,
-            "filename": item.filename,
-            "blob_path": item.filename,
-            "content_sha256": item.content_sha256,
-            "customer_name": item.record["customer_name"],
-            "customer_id": item.record["customer_id"],
-            "product_family": item.record.get("product_family"),
-        }
-    documents = [by_slot[kind] for kind in APPLICATION_TYPES if kind in by_slot]
+        intended = str(item.record.get("intended_outcome") or item.application_type)
+        documents[application_id] = _manifest_row(
+            item.record,
+            filename=item.filename,
+            content_sha256=item.content_sha256,
+            intended_outcome=intended,
+        )
     return {
         "generated_at": generated_at,
         "watermark": WATERMARK,
@@ -707,21 +806,8 @@ def write_applications(
     *,
     stale_filenames: set[str] | None = None,
 ) -> None:
+    del stale_filenames
     out.mkdir(parents=True, exist_ok=True)
-    keep = {item.filename for item in rendered}
-    for doc in manifest.get("documents") or []:
-        if isinstance(doc, dict) and doc.get("filename"):
-            keep.add(str(doc["filename"]))
-    candidates = {name for name in (stale_filenames or set())}
-    candidates.update(path.name for path in out.glob("credit-application-*.md"))
-    candidates.update(f"{kind}.md" for kind in APPLICATION_TYPES)
-    for name in sorted(candidates):
-        if name in keep:
-            continue
-        path = out / name
-        if path.is_file():
-            path.unlink()
-            echo(f"removed {path}")
     for item in rendered:
         path = out / item.filename
         path.write_text(item.markdown, encoding="utf-8")
@@ -742,14 +828,53 @@ def application_blob_metadata(item: RenderedApplication) -> dict[str, str]:
     }
 
 
-def run_generate_application(
+def _plan_generate_work(
     config: ApplicationGenerateConfig,
-    echo: Echo = print,
-    *,
-    completer: ChatCompleter | None = None,
-    blob_store: BlobStore | None = None,
-    credential: TokenCredential | None = None,
-) -> list[RenderedApplication]:
+    existing: dict[str, dict[str, Any]],
+) -> tuple[list[tuple[str, str | None]], set[str]]:
+    if config.force:
+        if config.count != 1:
+            raise TalosError("--force cannot be combined with --count", exit_code=1)
+        target = (config.application_id or "").strip()
+        if not target:
+            raise TalosError("--force requires --application-id", exit_code=1)
+        if not re.fullmatch(APPLICATION_ID_RE, target):
+            raise TalosError(
+                f"application_id {target!r} is not CA-YYYYMMDD-unix_ms",
+                exit_code=1,
+            )
+        previous = existing.get(target)
+        if previous is None:
+            raise TalosError(
+                f"application {target} not found; generate without --force to append",
+                exit_code=1,
+            )
+        if config.types:
+            unknown = [kind for kind in config.types if kind not in APPLICATION_TYPES]
+            if unknown:
+                raise TalosError(
+                    f"unknown application type {unknown[0]!r}",
+                    exit_code=1,
+                )
+            if len(config.types) != 1:
+                raise TalosError(
+                    "--force --application-id accepts at most one --type",
+                    exit_code=1,
+                )
+            kind = config.types[0]
+        else:
+            kind = str(
+                previous.get("intended_outcome")
+                or previous.get("application_type")
+                or ""
+            )
+            if kind not in APPLICATION_TYPES:
+                raise TalosError(
+                    f"existing application {target} has no intended_outcome; pass --type",
+                    exit_code=1,
+                )
+        return [(kind, target)], {target}
+
     types = config.types
     if not types:
         raise TalosError("exactly one of --type or --all is required", exit_code=1)
@@ -759,24 +884,34 @@ def run_generate_application(
             f"unknown application type {unknown[0]!r}",
             exit_code=1,
         )
+    if config.count < 1:
+        raise TalosError("--count must be >= 1", exit_code=1)
+    work = [(kind, None) for kind in types for _ in range(config.count)]
+    return work, set()
 
-    existing = load_existing_slots(config.out)
-    occupied = [kind for kind in types if kind in existing]
-    if occupied and not config.force:
-        names = ", ".join(occupied)
-        raise TalosError(
-            f"application slot exists ({names}); pass --force to overwrite",
-            exit_code=1,
-        )
+
+def run_generate_application(
+    config: ApplicationGenerateConfig,
+    echo: Echo = print,
+    *,
+    completer: ChatCompleter | None = None,
+    blob_store: BlobStore | None = None,
+    credential: TokenCredential | None = None,
+    clock: Callable[[], datetime] | None = None,
+) -> list[RenderedApplication]:
+    existing = load_existing_applications(config.out)
+    work, replacing = _plan_generate_work(config, existing)
+    allocator = SerialAllocator(
+        collect_used_serials(config.out, existing),
+        clock=clock,
+    )
 
     if config.dry_run:
         echo("dry-run: no LLM call")
-        used = used_identities(existing, replacing=types)
-        for kind in types:
-            application_id = allocate_application_id(used)
-            used.add(application_id)
+        for kind, forced_id in work:
+            application_id = forced_id or allocator.mint()
             echo(
-                f"dry-run: would generate slot {kind} -> "
+                f"dry-run: would generate {kind} -> "
                 f"{config.out / application_filename(application_id)}"
             )
         if not config.local_only:
@@ -818,21 +953,17 @@ def run_generate_application(
     facts_text = config.facts_path.read_text(encoding="utf-8")
     user_template = _jinja_env(paths.user.parent).get_template(paths.user.name)
 
-    used_families = {
-        str(record.get("product_family"))
-        for slot, record in existing.items()
-        if slot not in types and record.get("product_family") in PRODUCT_FAMILIES
-    }
     rendered: list[RenderedApplication] = []
     pending_records: list[dict[str, Any]] = []
-    stale_filenames: set[str] = set()
-    for kind in types:
-        used = used_identities(existing, replacing=types, pending=pending_records)
-        application_id = allocate_application_id(used)
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    previous = existing.get(next(iter(replacing), ""), {}) if replacing else {}
+
+    for kind, forced_id in work:
+        used = used_identities(existing, replacing=replacing, pending=pending_records)
         customer_id = allocate_customer_id(used)
-        product_family = assign_product_family(kind, used_families)
-        used_families.add(product_family)
+        product_family = SLOT_PRODUCT_FAMILY[kind]
         attached, _omitted = attached_documents_for(kind, product_family)
+        candidate = forced_id or allocator.peek()
         record, item = _complete_one(
             chat,
             user_template=user_template,
@@ -840,7 +971,7 @@ def run_generate_application(
             schema_text=schema_text,
             facts_text=facts_text,
             application_type=kind,
-            application_id=application_id,
+            application_id=candidate,
             customer_id=customer_id,
             product_family=product_family,
             attached_documents=attached,
@@ -848,52 +979,35 @@ def run_generate_application(
             echo=echo,
             template_path=paths.template,
         )
+        application_id = forced_id or allocator.mint(peeked=candidate)
+        if application_id != candidate:
+            record["application_id"] = application_id
+            item = render_application(record, paths.template, application_type=kind)
+        intended = kind
+        if forced_id and not config.types:
+            intended = str(previous.get("intended_outcome") or kind)
+        record["intended_outcome"] = intended
+        record["_filename"] = item.filename
+        record["content_sha256"] = item.content_sha256
+        existing[application_id] = record
         pending_records.append(record)
         rendered.append(item)
-        previous = existing.get(kind) or {}
-        old_name = str(previous.get("_filename") or previous.get("filename") or "")
-        if old_name:
-            stale_filenames.add(old_name)
-        stale_filenames.add(f"{kind}.md")
-
-    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    kept_existing = {
-        slot: record for slot, record in existing.items() if slot not in types
-    }
-    manifest = build_application_manifest(
-        kept_existing,
-        rendered,
-        generated_at=generated_at,
-        container=config.container,
-    )
-    write_applications(
-        config.out,
-        rendered,
-        manifest,
-        echo,
-        stale_filenames=stale_filenames,
-    )
-
-    if want_azure:
-        if store is None:
-            store = open_blob_store(
-                generate_env,
-                container=config.container,
-                account_url=config.account_url,
-                credential=credential,
-            )
-        keep_blobs = {
-            str(doc["filename"])
-            for doc in manifest.get("documents") or []
-            if isinstance(doc, dict) and doc.get("filename")
-        }
-        _upload_applications(
-            store,
-            rendered,
-            echo=echo,
-            keep_filenames=keep_blobs,
-            stale_filenames=stale_filenames,
+        manifest = build_application_manifest(
+            existing,
+            [],
+            generated_at=generated_at,
+            container=config.container,
         )
+        write_applications(config.out, [item], manifest, echo)
+        if want_azure:
+            if store is None:
+                store = open_blob_store(
+                    generate_env,
+                    container=config.container,
+                    account_url=config.account_url,
+                    credential=credential,
+                )
+            _upload_applications(store, [item], echo=echo)
 
     return rendered
 
@@ -931,7 +1045,7 @@ def _complete_one(
             used_identities=sorted(used),
             previous_errors=last_errors,
         )
-        echo(f"generating slot {application_type} ({application_id}) attempt {attempt}")
+        echo(f"generating {application_type} ({application_id}) attempt {attempt}")
         try:
             raw = chat.complete(
                 messages=[
@@ -977,8 +1091,6 @@ def _upload_applications(
     rendered: list[RenderedApplication],
     *,
     echo: Echo,
-    keep_filenames: set[str],
-    stale_filenames: set[str] | None = None,
 ) -> None:
     try:
         store.ensure_container()
@@ -991,14 +1103,6 @@ def _upload_applications(
             echo(
                 f"{item.record['application_id']}  {item.filename}  blob={url}  uploaded"
             )
-        extras = set(stale_filenames or ())
-        extras.update(store.list_markdown_names())
-        extras.update(f"{kind}.md" for kind in APPLICATION_TYPES)
-        for name in sorted(extras):
-            if name in keep_filenames or not name.endswith(".md"):
-                continue
-            store.delete_blob(name)
-            echo(f"{name}  blob deleted")
     except TalosError:
         raise
     except Exception as exc:
