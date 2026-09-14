@@ -39,9 +39,9 @@ ALLOWED_ENVS := dev1 prd1
 ENV ?= dev1
 AZURE_LOCATION ?= swedencentral
 AZURE_SUBSCRIPTION_ID ?= f298e323-efae-4203-ba61-fc3496190479
-TFSTATE_RG := rg-credit-policy-tfstate
+TFSTATE_RG := terraform-state-shared
 TFSTATE_CONTAINER := tfstate
-TFSTATE_ACCOUNT := sttfstlab5
+TFSTATE_ACCOUNT := lab5tfstate1
 export ARM_SUBSCRIPTION_ID ?= $(AZURE_SUBSCRIPTION_ID)
 export ARM_USE_AZUREAD := true
 
@@ -101,7 +101,7 @@ infra-backend-create:
 	az account show --query name -o tsv
 	$(call header,Creating tfstate backend $(AZURE_LOCATION))
 	az group create --name $(TFSTATE_RG) --location $(AZURE_LOCATION) \
-		--tags environment=tfstate project=credit-policy-agent \
+		--tags environment=tfstate purpose=terraform-state \
 		--output none
 	az storage account create \
 		--name $(TFSTATE_ACCOUNT) \
@@ -138,8 +138,8 @@ infra-backend-show:
 infra-backend-destroy:
 	$(call need-az)
 	$(call need-az-auth)
-	$(call header,Deleting tfstate backend)
-	az group delete --name $(TFSTATE_RG) --yes
+	$(call header,Deleting tfstate storage account $(TFSTATE_ACCOUNT))
+	az storage account delete --name $(TFSTATE_ACCOUNT) --resource-group $(TFSTATE_RG) --yes
 
 infra-fmt:
 	$(call need-terraform)

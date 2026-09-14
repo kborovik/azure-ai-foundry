@@ -38,7 +38,7 @@ jobs:
       - name: Terraform init
         run: |
           terraform -chdir=infra init -input=false -reconfigure \
-            -backend-config="storage_account_name=sttfstlab5" \
+            -backend-config="storage_account_name=lab5tfstate1" \
             -backend-config="key=prd1.tfstate"
       - name: Write terraform outputs
         run: terraform -chdir=infra output -json > infra/outputs.json

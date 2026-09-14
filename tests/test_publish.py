@@ -34,7 +34,7 @@ pytestmark = pytest.mark.unit
 
 PROJECT = "https://aif-cp-demo.services.ai.azure.com/api/projects/credit-policy-demo"
 PROJECT_ID = (
-    "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-demo"
+    "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/demo"
     "/providers/Microsoft.CognitiveServices/accounts/aif-cp-demo/projects/credit-policy-demo"
 )
 CLIENT_ID = "00001111-aaaa-2222-bbbb-3333cccc4444"
@@ -45,7 +45,7 @@ def _config(**overrides: object) -> PublishConfig:
     values: dict[str, object] = dict(
         project_endpoint=PROJECT,
         project_resource_id=PROJECT_ID,
-        resource_group="rg-demo",
+        resource_group="demo",
         tenant_id=TENANT,
     )
     values.update(overrides)
@@ -99,7 +99,7 @@ def test_subscription_and_resource_group_parse() -> None:
         subscription_id_from_resource_id(PROJECT_ID)
         == "00000000-0000-0000-0000-000000000000"
     )
-    assert resource_group_from_resource_id(PROJECT_ID) == "rg-demo"
+    assert resource_group_from_resource_id(PROJECT_ID) == "demo"
 
 
 def test_tenant_from_jwt() -> None:
@@ -193,7 +193,7 @@ def test_happy_path_patches_then_puts_bot_then_publishes_shared() -> None:
     assert publish.json_body["publishAsAutopilot"] is False
     assert publish.json_body["appVersion"] == "1.0.0"
     expected_bot = bot_arm_id(
-        "00000000-0000-0000-0000-000000000000", "rg-demo", "bot-credit-policy-agent"
+        "00000000-0000-0000-0000-000000000000", "demo", "bot-credit-policy-agent"
     )
     assert publish.json_body["botServiceArmId"] == expected_bot
     assert any("title-1" in line for line in logs)
@@ -213,7 +213,7 @@ def test_skips_endpoint_patch_when_activity_and_rbac_already_enabled() -> None:
 
 
 def test_bot_arm_id_skips_bot_create() -> None:
-    arm = bot_arm_id("00000000-0000-0000-0000-000000000000", "rg-demo", "existing-bot")
+    arm = bot_arm_id("00000000-0000-0000-0000-000000000000", "demo", "existing-bot")
     rest = _script_publish(
         FakeRest(),
         agent=_agent(protocol_configuration={"responses": {}}),
@@ -280,7 +280,7 @@ def test_cli_publish_dry_run(clean_azure_env: None) -> None:
     assert "dry-run" in result.output
     assert "BotServiceRbac" in result.output
     assert PUBLISH_SCOPE_JUST_YOU in result.output
-    assert "rg-demo" in result.output
+    assert "demo" in result.output
 
 
 def test_spike_doc_keeps_hosted_agents_out_of_v1() -> None:

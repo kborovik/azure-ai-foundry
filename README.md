@@ -34,7 +34,7 @@ Terraform CLI in `infra/` provisions Storage, Azure AI Search (Basic), and a Mic
 
 **Create Azure resources**
 
-Remote state lives in resource group `rg-credit-policy-tfstate` (not the workload `stcp*` storage account). Bootstrap once, then apply `dev1` or `prd1`:
+Remote state lives in shared resource group `terraform-state-shared` (reused across projects; not the workload `stcp*` storage account). Bootstrap once, then apply `dev1` or `prd1`:
 
 ```bash
 gmake infra-backend-create   # once: tfstate RG + storage
@@ -57,17 +57,17 @@ Equivalent:
 az login
 export ARM_SUBSCRIPTION_ID=<subscription>
 export ARM_USE_AZUREAD=true
-az group create --name rg-credit-policy-tfstate --location swedencentral
-az storage account create --name sttfstlab5 \
-  --resource-group rg-credit-policy-tfstate --location swedencentral \
+az group create --name terraform-state-shared --location swedencentral
+az storage account create --name lab5tfstate1 \
+  --resource-group terraform-state-shared --location swedencentral \
   --sku Standard_LRS --kind StorageV2 --min-tls-version TLS1_2 \
   --allow-blob-public-access false --https-only true
-az storage container create --name tfstate --account-name sttfstlab5
+az storage container create --name tfstate --account-name lab5tfstate1
 az role assignment create --role "Storage Blob Data Contributor" \
   --assignee <operator-object-id> \
-  --scope /subscriptions/<subscription>/resourceGroups/rg-credit-policy-tfstate/providers/Microsoft.Storage/storageAccounts/sttfstlab5
+  --scope /subscriptions/<subscription>/resourceGroups/terraform-state-shared/providers/Microsoft.Storage/storageAccounts/lab5tfstate1
 terraform -chdir=infra init -reconfigure \
-  -backend-config="storage_account_name=sttfstlab5" \
+  -backend-config="storage_account_name=lab5tfstate1" \
   -backend-config="key=dev1.tfstate"
 terraform -chdir=infra apply -var-file=dev1.tfvars
 ```

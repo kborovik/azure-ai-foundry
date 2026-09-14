@@ -1,6 +1,6 @@
 variable "environment_name" {
   type        = string
-  description = "Environment name used in the resource group rg-credit-policy-<env>. Must be dev1 or prd1."
+  description = "Environment name used in the resource group credit-policy-<env>. Must be dev1 or prd1."
   default     = "dev1"
 
   validation {

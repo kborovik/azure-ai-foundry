@@ -2,7 +2,7 @@ data "azurerm_client_config" "current" {}
 
 locals {
   resource_token            = "lab5"
-  resource_group_name       = "rg-credit-policy-${var.environment_name}"
+  resource_group_name       = "credit-policy-${var.environment_name}"
   storage_name              = "stcp${local.resource_token}"
   search_name               = "credit-policy-${local.resource_token}"
   foundry_name              = "credit-policy-${local.resource_token}"

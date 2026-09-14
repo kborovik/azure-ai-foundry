@@ -10,7 +10,7 @@ terraform {
 
   # storage_account_name + key come from `terraform init -backend-config`
   backend "azurerm" {
-    resource_group_name = "rg-credit-policy-tfstate"
+    resource_group_name = "terraform-state-shared"
     container_name      = "tfstate"
     use_azuread_auth    = true
   }

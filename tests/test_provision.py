@@ -22,11 +22,11 @@ pytestmark = pytest.mark.unit
 SEARCH = "https://srch-cp-demo.search.windows.net"
 PROJECT = "https://aif-cp-demo.services.ai.azure.com/api/projects/credit-policy-demo"
 PROJECT_ID = (
-    "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-demo"
+    "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/demo"
     "/providers/Microsoft.CognitiveServices/accounts/aif-cp-demo/projects/credit-policy-demo"
 )
 STORAGE_ID = (
-    "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-demo"
+    "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/demo"
     "/providers/Microsoft.Storage/storageAccounts/stcpdemo"
 )
 AI_SERVICES = "https://aif-cp-demo.services.ai.azure.com"

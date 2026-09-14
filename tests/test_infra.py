@@ -147,7 +147,7 @@ def test_resource_names_match_spec() -> None:
     main = _read("main.tf")
     assert re.search(r'resource_token\s*=\s*"lab5"', main)
     assert "md5(" not in main
-    assert "rg-credit-policy-${var.environment_name}" in main
+    assert "credit-policy-${var.environment_name}" in main
     assert "stcp${local.resource_token}" in main
     assert re.search(
         r'search_name\s*=\s*"credit-policy-\$\{local\.resource_token\}"', main
@@ -328,7 +328,7 @@ def test_makefile_ai_inspect_recipes(repo_root: Path) -> None:
 def test_gha_release_uses_prd1_backend_key(repo_root: Path) -> None:
     text = (repo_root / ".github/workflows/deploy.yml").read_text(encoding="utf-8")
     assert "key=prd1.tfstate" in text
-    assert "storage_account_name=sttfstlab5" in text
+    assert "storage_account_name=lab5tfstate1" in text
     assert "ARM_USE_AZUREAD" in text
 
 
@@ -336,7 +336,7 @@ def test_azurerm_backend_uses_azuread() -> None:
     versions = _read("versions.tf")
     assert 'backend "azurerm"' in versions
     assert "use_azuread_auth" in versions
-    assert "rg-credit-policy-tfstate" in versions
+    assert "terraform-state-shared" in versions
     assert 'container_name      = "tfstate"' in versions or re.search(
         r'container_name\s*=\s*"tfstate"', versions
     )
@@ -356,24 +356,25 @@ def test_backend_bootstrap_uses_az_cli_not_terraform(repo_root: Path) -> None:
     assert "az storage account create" in create
     assert "az storage container create" in create
     assert "Storage Blob Data Contributor" in create
-    assert "TFSTATE_ACCOUNT := sttfstlab5" in makefile
+    assert "TFSTATE_ACCOUNT := lab5tfstate1" in makefile
     assert "stcp${" not in makefile
     assert "az group show" in show
     assert "az storage account show" in show
-    assert "az group delete" in destroy
+    assert "az storage account delete" in destroy
+    assert "az group delete" not in destroy
+    assert "TFSTATE_RG := terraform-state-shared" in makefile
     gitignore = (repo_root / ".gitignore").read_text(encoding="utf-8")
     assert "*.tfstate" in gitignore
     assert "*.tfstate.*" in gitignore
     assert "infra/outputs.json" in gitignore
 
 
-def test_tfstate_account_name_is_fixed_sttfst_prefix(repo_root: Path) -> None:
+def test_tfstate_account_name_is_fixed(repo_root: Path) -> None:
     makefile = (repo_root / "Makefile").read_text(encoding="utf-8")
     match = re.search(r"^TFSTATE_ACCOUNT := (\S+)", makefile, re.M)
     assert match is not None
     name = match.group(1)
-    assert name == "sttfstlab5"
-    assert name.startswith("sttfst")
+    assert name == "lab5tfstate1"
     assert not name.startswith("stcp")
     assert 3 <= len(name) <= 24
     assert name.isalnum() and name.islower()
@@ -385,8 +386,8 @@ def test_makefile_reconfigure_and_backend_key(repo_root: Path) -> None:
     assert "-reconfigure" in init
     assert "-migrate-state" not in makefile
     assert "key=$(ENV).tfstate" in makefile
-    assert "sttfst" in makefile
-    assert "rg-credit-policy-tfstate" in makefile
+    assert "lab5tfstate1" in makefile
+    assert "terraform-state-shared" in makefile
 
 
 def test_makefile_infra_create_emits_outputs_json(repo_root: Path) -> None:

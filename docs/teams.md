@@ -4,7 +4,7 @@ Publish `credit-policy-agent` to Microsoft Teams as **Just you** (`BotServiceRba
 
 ## Prerequisites
 
-- Operator is Azure Bot Service Contributor on the workload resource group `rg-credit-policy-<env>`.
+- Operator is Azure Bot Service Contributor on the workload resource group `credit-policy-<env>`.
 - Register the `Microsoft.BotService` resource provider on the subscription:
 
 ```bash
