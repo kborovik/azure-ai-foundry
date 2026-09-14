@@ -65,11 +65,15 @@ default: help
 # Tests and local loop
 ###############################################################################
 
+test: .venv ## Unit tests (no Azure)
+	$(call header,Running unit tests)
+	$(UV) run pytest
+
 check: .venv ## Check Python code
 	$(call header,Checking)
 	$(UV) run ruff format --check
 	$(UV) run ruff check
-	$(UV) run pytest
+	$(MAKE) test
 
 generate: .venv ## Render corpus locally
 	$(call header,Generating credit policies)
@@ -225,15 +229,21 @@ ai-search: ## Show Azure AI Search service
 			--query "{name:name,sku:sku.name,status:status,semantic:semanticSearch}" -o table; \
 	}
 
-ai-storage: ## Show Storage account and containers
+ai-storage: ## Show Storage account, containers, and blobs
 	$(call ai-pre,Storage)
 	$(ai-ids) | { \
 		read rg account project search storage endpoint; \
 		[ -n "$$storage" ] || exit 1; \
 		az storage account show --name $$storage --resource-group $$rg \
 			--query "{name:name,kind:kind,sku:sku.name,https:enableHttpsTrafficOnly,tls:minimumTlsVersion}" -o table; \
+		printf '%s\n' "$(blue)==> Containers <==$(reset)"; \
 		az storage container list --account-name $$storage --auth-mode login \
 			--query "[].{name:name}" -o table; \
+		for c in $$(az storage container list --account-name $$storage --auth-mode login --query "[].name" -o tsv); do \
+			printf '%s\n' "$(blue)==> $$c <==$(reset)"; \
+			az storage blob list --account-name $$storage --container-name $$c --auth-mode login \
+				--query "[].{name:name,bytes:properties.contentLength,modified:properties.lastModified}" -o table; \
+		done; \
 	}
 
 infra:

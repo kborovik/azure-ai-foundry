@@ -18,8 +18,9 @@ from talos.generate import (
     load_and_validate_facts,
     resolve_blob_auth,
     run_generate,
+    sync_markdown_directory,
 )
-from tests.fakes import FakeBlobStore
+from tests.fakes import FakeBlob, FakeBlobStore
 
 pytestmark = pytest.mark.unit
 
@@ -333,6 +334,24 @@ def test_force_uploads_even_when_hash_matches(tmp_path: Path) -> None:
     store.uploads.clear()
     run_generate(_azure_config(out, force=True), blob_store=store)
     assert len(store.uploads) == 12
+
+
+def test_sync_markdown_directory_deletes_blobs_missing_locally(tmp_path: Path) -> None:
+    directory = tmp_path / "docs"
+    directory.mkdir()
+    (directory / "keep.md").write_text("# keep\n", encoding="utf-8")
+    store = FakeBlobStore()
+    store.blobs["keep.md"] = FakeBlob(
+        data=b"stale-keep", metadata={"content_sha256": "0" * 64}
+    )
+    store.blobs["accepted.md"] = FakeBlob(data=b"legacy", metadata={})
+    uploaded = sync_markdown_directory(
+        store, directory, force=False, echo=lambda _: None
+    )
+    assert uploaded == 1
+    assert "accepted.md" not in store.blobs
+    assert "keep.md" in store.blobs
+    assert "accepted.md" in store.deletes
 
 
 def test_azure_only_does_not_write_local(tmp_path: Path) -> None:

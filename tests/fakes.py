@@ -112,6 +112,7 @@ class FakeBlobStore:
         self.container_created = False
         self.public_access: str | None = "unset"
         self.uploads: list[str] = []
+        self.deletes: list[str] = []
         self.sha_lookups: list[str] = []
         self.fail_on_upload = False
 
@@ -138,6 +139,13 @@ class FakeBlobStore:
         self.blobs[blob_name] = FakeBlob(data=data, metadata=dict(metadata))
         self.uploads.append(blob_name)
         return self.blob_url(blob_name)
+
+    def list_markdown_names(self) -> list[str]:
+        return [name for name in self.blobs if name.endswith(".md")]
+
+    def delete_blob(self, blob_name: str) -> None:
+        self.deletes.append(blob_name)
+        self.blobs.pop(blob_name, None)
 
 
 def json_response(status_code: int, body: Any | None = None) -> RestResponse:

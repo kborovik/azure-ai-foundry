@@ -6,7 +6,11 @@ from typing import Any
 import pytest
 
 from talos.env import repo_root
-from tests.live_support import application_cases, invoke_agent
+from tests.live_support import (
+    application_cases,
+    assert_policy_only_citations,
+    invoke_agent,
+)
 
 
 def _activity_enabled(agent: dict[str, Any]) -> bool:
@@ -49,8 +53,29 @@ def test_runbook_documents_just_you_and_sideload() -> None:
         "talos publish",
         "publishScope",
         "hosted-agents.md",
+        "CA-2026-000001",
+        "manifest.json",
     ):
         assert needle in text, needle
+    assert "CA-2026-000101" not in text
+
+
+@pytest.mark.unit
+def test_policy_only_citations_reject_application_blob() -> None:
+    assert_policy_only_citations("ok 【0:1†CP-DOC-2026-01.md】")
+    assert_policy_only_citations(
+        "ok 【0:1†https://st.blob.core.windows.net/credit-policies/"
+        "CP-RML-2026-01-residential-mortgage.md】"
+    )
+    with pytest.raises(AssertionError):
+        assert_policy_only_citations("bad 【0:1†credit-application-CA-2026-000202.md】")
+    with pytest.raises(AssertionError):
+        assert_policy_only_citations(
+            "bad 【0:1†https://st.blob.core.windows.net/client-applications/"
+            "credit-application-CA-2026-000202.md】"
+        )
+    with pytest.raises(AssertionError):
+        assert_policy_only_citations("bad 【0:1†accepted.md】")
 
 
 @pytest.mark.teams

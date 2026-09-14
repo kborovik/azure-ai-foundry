@@ -4,6 +4,7 @@
 
 ### Changed
 
+- **Opaque customer filings:** `talos generate application` writes `credit-application-{application_id}.md` with opaque ids `CA-YYYY-NNNNNN`. Markdown is a borrower filing (identity, product, amount, financials, attached-document titles). `accepted`/`rejected` list the full required-document set; `missing-data` omits at least one title. Mixed product families per slot. `intended_outcome` lives in gitignored `manifest.json` only. EvaluationMode compares attached-docs to `CP-DOC-2026-01` plus the product required list, then emits a judgement, and must not infer outcome from id or filename.
 - **Unit tests:** drop `talos test` Click command. `gmake test` runs `uv run pytest` (addopts `-m unit`). `gmake check` runs ruff then `test`. GitHub Actions unit workflow runs `uv run pytest`.
 - **Generate group:** `uv run talos generate` is a Click group (`policy`, `application`). Bare `talos generate` prints help and exits 2. `talos generate policy` is the existing policy render and does not run deploy.
 - **Standing terraform init:** `gmake infra-init` and README use `-reconfigure`, not `-migrate-state`. Remote azurerm state is already live. Reconstruct after clone with backend-config `key=<env>.tfstate`.
@@ -18,7 +19,7 @@
 
 ### Added
 
-- **`gmake ai-account` / `ai-project` / `ai-agent` / `ai-search` / `ai-storage`:** live Azure CLI tables for the Foundry account and model deployments, project, prompt agent, Search, and Storage. Names come from `infra/outputs.json` via `jq` (run `gmake infra-create` first). Does not spawn `terraform output`. Drop `ai-list` / `ai-show`.
+- **`gmake ai-account` / `ai-project` / `ai-agent` / `ai-search` / `ai-storage`:** live Azure CLI tables for the Foundry account and model deployments, project, prompt agent, Search, and Storage. `ai-storage` lists containers then blobs (name, bytes, last modified) per container. Names come from `infra/outputs.json` via `jq` (run `gmake infra-create` first). Does not spawn `terraform output`. Drop `ai-list` / `ai-show`.
 - **`talos publish`:** optional REST path for Teams Just you (`publishScope=Shared`, `BotServiceRbac`). Creates the Azure Bot Service + Teams channel, merge-patches Activity without dropping existing `protocol_configuration` / `authorization_schemes`, then POSTs Foundry's Microsoft 365 publish API. `--dry-run` prints the plan. Portal Direct publish remains valid. Hosted-agent spike: [docs/hosted-agents.md](docs/hosted-agents.md).
 - **EvaluationMode:** `agents/credit-policy-agent.instructions.md` evaluates by `application_id` or `customer_name`, asks if both are missing, and cites policy documents only.
 - **Teams Just-you:** runbook in `docs/teams.md` (BotServiceRbac, sideload fallback, evaluate-by-id and evaluate-by-name). Marker `teams` skips unless `E2E_TEAMS=1`; flag set with no Activity client skips, not fails.

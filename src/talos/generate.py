@@ -94,6 +94,10 @@ class BlobStore(Protocol):
         self, blob_name: str, data: bytes, metadata: dict[str, str]
     ) -> str: ...
 
+    def list_markdown_names(self) -> list[str]: ...
+
+    def delete_blob(self, blob_name: str) -> None: ...
+
 
 class AzureBlobStore:
     def __init__(self, service: Any, container: str) -> None:
@@ -157,6 +161,19 @@ class AzureBlobStore:
             content_settings=ContentSettings(content_type=MARKDOWN_CONTENT_TYPE),
         )
         return str(blob.url)
+
+    def list_markdown_names(self) -> list[str]:
+        return [
+            str(item.name)
+            for item in self._client.list_blobs()
+            if str(item.name).endswith(".md")
+        ]
+
+    def delete_blob(self, blob_name: str) -> None:
+        try:
+            self._client.delete_blob(blob_name)
+        except ResourceNotFoundError:
+            return
 
 
 def resolve_blob_auth(
@@ -243,6 +260,12 @@ def sync_markdown_directory(
             url = store.upload_markdown(path.name, data, metadata)
             echo(f"{path.name}  blob={url}  uploaded")
             uploaded += 1
+        keep = {path.name for path in paths}
+        for name in store.list_markdown_names():
+            if name in keep:
+                continue
+            store.delete_blob(name)
+            echo(f"{name}  blob deleted")
     except TalosError:
         raise
     except Exception as exc:
