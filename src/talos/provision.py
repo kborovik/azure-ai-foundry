@@ -707,9 +707,7 @@ def _index_document_count(
     index_name = extract_index_name(response.json)
     if not index_name:
         return None
-    count_url = _search_url(
-        config, f"indexes/{quote(index_name, safe='')}/docs/$count"
-    )
+    count_url = _search_url(config, f"indexes/{quote(index_name, safe='')}/docs/$count")
     counted = rest.request("GET", count_url, scope=SEARCH_SCOPE)
     if not counted.ok:
         return None

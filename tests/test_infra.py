@@ -216,9 +216,7 @@ def test_terraform_variables_are_tfvars_keys_only() -> None:
     main = _read("main.tf")
     assert re.search(r'project_name\s*=\s*"credit-policy-demo"', main)
     assert re.search(r'chat_deployment_name\s*=\s*"gpt-5-mini"', main)
-    assert re.search(
-        r'embedding_deployment_name\s*=\s*"text-embedding-3-large"', main
-    )
+    assert re.search(r'embedding_deployment_name\s*=\s*"text-embedding-3-large"', main)
     assert "var.principal_id" not in main
     assert "data.azurerm_client_config.current.object_id" in main
 

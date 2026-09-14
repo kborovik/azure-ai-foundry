@@ -46,8 +46,10 @@ def test_policy_knowledge_source_indexed(
     if end_time is None:
         pytest.skip("policy knowledge source has not finished indexing")
     assert failed == 0
-    counted = processed if processed >= MIN_INDEXED_ITEMS else _index_count(
-        live_rest, live_env, DEFAULT_KNOWLEDGE_SOURCE
+    counted = (
+        processed
+        if processed >= MIN_INDEXED_ITEMS
+        else _index_count(live_rest, live_env, DEFAULT_KNOWLEDGE_SOURCE)
     )
     assert counted >= MIN_INDEXED_ITEMS
 
