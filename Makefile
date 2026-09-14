@@ -65,11 +65,15 @@ default: help
 # Tests and local loop
 ###############################################################################
 
+test: .venv ## Unit tests (no Azure)
+	$(call header,Running unit tests)
+	$(UV) run pytest
+
 check: .venv ## Check Python code
 	$(call header,Checking)
 	$(UV) run ruff format --check
 	$(UV) run ruff check
-	$(UV) run pytest
+	$(MAKE) test
 
 generate: .venv ## Render corpus locally
 	$(call header,Generating credit policies)
