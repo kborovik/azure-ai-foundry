@@ -6,7 +6,7 @@ A Foundry Agent Service prompt agent that answers credit-policy questions from a
 
 Relationship managers and credit officers need a cited answer to questions such as “what is max LTV on an investment property?” during a live deal. Today that means paging through policy PDFs. Generic chat models invent LTV, DTI, and committee names.
 
-This repository is a **demo**, not a production credit system. It shows a Foundry Agent Service prompt agent grounded on a Foundry IQ knowledge base. The source of truth is twelve synthetic bank credit-policy Markdown files plus three gitignored synthetic client applications in Azure Blob Storage. End users chat with the agent in Microsoft Teams 1:1 for policy questions and application evaluation by `application_id` or `customer_name`.
+This repository is a **demo**, not a production credit system. It shows a Foundry Agent Service prompt agent grounded on a Foundry IQ knowledge base. The source of truth is twelve synthetic bank credit-policy Markdown files plus gitignored synthetic client applications in Azure Blob Storage. End users chat with the agent in Microsoft Teams 1:1 for policy questions and application evaluation by `application_id` or `customer_name`.
 
 ## Runtime Sequence
 

@@ -4,6 +4,7 @@ import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import pytest
 from click.testing import CliRunner
@@ -469,6 +470,8 @@ def test_old_local_application_files_stay(tmp_path: Path) -> None:
     assert orphan.is_file()
     assert (out / rendered[0].filename).is_file()
     assert rendered[0].filename != orphan.name
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    assert "CA-20260115-1768478400999" not in manifest["documents"]
 
 
 def test_corrupt_manifest_fails(tmp_path: Path) -> None:
@@ -734,6 +737,56 @@ def test_count_without_type_or_all_is_usage_error() -> None:
     assert result.exit_code == 1
     assert "--count" in result.output
     assert "--type" in result.output or "--all" in result.output
+
+
+class _AdvancingClock:
+    def __init__(self, start: datetime, step_ms: int = 5) -> None:
+        self._current = start
+        self._step_ms = step_ms
+
+    def __call__(self) -> datetime:
+        now = self._current
+        self._current = datetime.fromtimestamp(
+            now.timestamp() + self._step_ms / 1000.0,
+            tz=timezone.utc,
+        )
+        return now
+
+
+class _EchoIdCompleter:
+    def complete(self, *, messages: list[dict[str, str]]) -> str:
+        blob = "\n".join(message["content"] for message in messages)
+        match = re.search(r"application_id:\s*(CA-\d{8}-\d+)", blob)
+        assert match is not None
+        serial = match.group(1)
+        record: dict[str, Any] = _valid_record(
+            "accepted",
+            application_id=serial,
+            narrative=(
+                f"I request this synthetic demo facility under {serial} "
+                "and list the documents I am submitting."
+            ),
+        )
+        return json.dumps(record)
+
+
+def test_peek_and_mint_keep_one_serial_when_clock_advances(tmp_path: Path) -> None:
+    out = tmp_path / "apps"
+    rendered = run_generate_application(
+        _config(out),
+        completer=_EchoIdCompleter(),
+        echo=lambda _: None,
+        clock=_AdvancingClock(FROZEN_NOW),
+    )
+    serial = rendered[0].record["application_id"]
+    text = (out / rendered[0].filename).read_text(encoding="utf-8")
+    assert serial == FROZEN_SERIAL
+    assert rendered[0].filename == application_filename(serial)
+    assert credit_application_heading(serial) in text
+    assert serial in text
+    parsed = parse_application_markdown(text)
+    assert parsed["application_id"] == serial
+    assert serial in parsed["narrative"]
 
 
 def test_serial_allocator_issues_100_distinct_ids_when_clock_frozen() -> None:

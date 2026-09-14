@@ -25,7 +25,7 @@ DEFAULT_PUBLISH_SHORT_DESCRIPTION = (
 )
 DEFAULT_PUBLISH_FULL_DESCRIPTION = (
     "Demo Foundry prompt agent that answers credit-policy questions from synthetic "
-    "Markdown in Foundry IQ and evaluates three synthetic client applications by "
+    "Markdown in Foundry IQ and evaluates synthetic client applications by "
     "application_id or customer_name. Not a production credit system."
 )
 PUBLISH_SCOPE_JUST_YOU = "Shared"
@@ -234,9 +234,9 @@ KS_DESCRIPTION = (
 )
 
 KS_APPLICATION_DESCRIPTION = (
-    "Synthetic Contoso Demo Bank client applications for demo evaluation only: "
-    "accepted, rejected, and missing-data slots. Identify an application by "
-    "application_id or customer_name. Not a production origination system."
+    "Synthetic Contoso Demo Bank client applications for demo evaluation only. "
+    "Identify an application by application_id or customer_name. Not a production "
+    "origination system."
 )
 
 KB_DESCRIPTION = (

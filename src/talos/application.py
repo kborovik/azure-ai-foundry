@@ -444,7 +444,7 @@ def load_existing_applications(out: Path) -> dict[str, dict[str, Any]]:
             try:
                 record = parse_application_markdown(path.read_text(encoding="utf-8"))
             except TalosError:
-                record = {"application_id": application_id}
+                continue
             record["_filename"] = path.name
             records[application_id] = record
     return records
@@ -501,7 +501,7 @@ def collect_used_serials(out: Path, existing: dict[str, dict[str, Any]]) -> set[
 
 
 class SerialAllocator:
-    """Mint unique CA-{YYYYMMDD}-{unix_ms} serials; bump unix_ms on collision."""
+    """Keep the peeked timestamp; bump unix_ms only when that serial is taken."""
 
     def __init__(
         self,
@@ -515,7 +515,15 @@ class SerialAllocator:
     def peek(self) -> str:
         return self._next_serial(consume=False)
 
-    def mint(self) -> str:
+    def mint(self, peeked: str | None = None) -> str:
+        if (
+            peeked
+            and peeked not in self._used
+            and not contains_forbidden_outcome_token(peeked)
+            and re.fullmatch(APPLICATION_ID_RE, peeked)
+        ):
+            self._used.add(peeked)
+            return peeked
         return self._next_serial(consume=True)
 
     def release(self, serial: str) -> None:
@@ -971,7 +979,7 @@ def run_generate_application(
             echo=echo,
             template_path=paths.template,
         )
-        application_id = forced_id or allocator.mint()
+        application_id = forced_id or allocator.mint(peeked=candidate)
         if application_id != candidate:
             record["application_id"] = application_id
             item = render_application(record, paths.template, application_type=kind)

@@ -16,7 +16,7 @@ The Microsoft 365 Agents SDK is a **custom host**: you run a process that speaks
 
 ## Why not v1
 
-- The demo needs cited policy answers and three synthetic application evaluations. A prompt agent with `knowledge_base_retrieve` covers that.
+- The demo needs cited policy answers and synthetic application evaluations. A prompt agent with `knowledge_base_retrieve` covers that.
 - Hosted agents add container build, registry, sandbox SKUs, and session lifecycle. None of that is in the Terraform stack or `talos deploy`.
 - A custom Agents SDK host would be a second agent surface. v1 forbids a second agent, a second knowledge base, and a second MCP connection.
 - v1 Terraform does not include Application Insights. Hosted-agent observability assumes it.
