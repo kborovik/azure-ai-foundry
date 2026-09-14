@@ -15,6 +15,7 @@ from azure.core.credentials import TokenCredential
 from azure.identity import DefaultAzureCredential
 
 from talos.constants import (
+    APPLICATION_DISCLAIMER_PHRASES,
     APPLICATION_FILENAME_TEMPLATE,
     APPLICATION_ID_RE,
     APPLICATION_LLM_ATTEMPTS,
@@ -278,6 +279,42 @@ def credit_application_heading(application_id: str) -> str:
     return f"# Credit application {application_id}"
 
 
+def disclaimer_phrase_in(text: str) -> str | None:
+    folded = text.casefold()
+    for phrase in APPLICATION_DISCLAIMER_PHRASES:
+        if phrase.casefold() in folded:
+            return phrase
+    return None
+
+
+def strip_watermark_from_facts_yaml(text: str) -> str:
+    kept: list[str] = []
+    for line in text.splitlines(keepends=True):
+        if re.match(r"^watermark:\s*", line) and WATERMARK in line:
+            continue
+        kept.append(line)
+    return "".join(kept)
+
+
+def _preamble_after_heading(text: str) -> str:
+    lines = text.splitlines()
+    start: int | None = None
+    for index, line in enumerate(lines):
+        if line.startswith("# Credit application "):
+            start = index
+            break
+    if start is None:
+        return ""
+    between: list[str] = []
+    for line in lines[start + 1 :]:
+        if line.startswith("## "):
+            break
+        stripped = line.strip()
+        if stripped:
+            between.append(stripped)
+    return "\n".join(between)
+
+
 def _yaml_prefix_present(text: str) -> bool:
     for line in text.splitlines():
         stripped = line.strip()
@@ -325,6 +362,12 @@ def parse_application_markdown(text: str) -> dict[str, Any]:
     if first == WATERMARK:
         raise TalosError(
             "application markdown must not start with the policy watermark",
+            exit_code=1,
+        )
+    found = disclaimer_phrase_in(text)
+    if found is not None:
+        raise TalosError(
+            f"application markdown must not contain {found!r}",
             exit_code=1,
         )
     if _yaml_prefix_present(text):
@@ -665,6 +708,9 @@ def validate_record(
         errors.append(
             "filing fields must not contain ApplicationType or judgement labels"
         )
+    found = disclaimer_phrase_in(json.dumps(record, ensure_ascii=False))
+    if found is not None:
+        errors.append(f"filing must not contain {found!r}")
 
     keys = identity_keys(record)
     overlap = keys & used
@@ -684,16 +730,31 @@ def validate_filing_markdown(markdown: str, record: dict[str, Any]) -> list[str]
         errors.append("YAML front matter is forbidden")
     if JUDGEMENT_LEAK_RE.search(markdown):
         errors.append("filing must not contain ApplicationType or judgement labels")
+    found = disclaimer_phrase_in(markdown)
+    if found is not None:
+        errors.append(f"filing must not contain {found!r}")
+    if _preamble_after_heading(markdown):
+        errors.append("preamble between H1 and first H2 is forbidden")
     if contains_forbidden_outcome_token(application_id):
         errors.append("application_id encodes an outcome token")
     if re.fullmatch(
         APPLICATION_ID_RE, application_id
     ) and contains_forbidden_outcome_token(application_filename(application_id)):
         errors.append("filename encodes an outcome token")
-    lower = markdown.lower()
-    for needle in ("identity", "product", "attached document"):
-        if needle not in lower:
-            errors.append(f"customer filing is missing {needle} section")
+    sections = _markdown_sections(markdown)
+    for heading in (
+        "identity",
+        "product",
+        "amount and financials",
+        "attached documents",
+        "applicant statement",
+    ):
+        if heading not in sections:
+            errors.append(f"customer filing is missing {heading} section")
+    narrative = str(record.get("narrative") or "").strip()
+    statement = sections.get("applicant statement", "").strip()
+    if narrative and statement != narrative:
+        errors.append("Applicant statement must hold the filing narrative")
     amount = ""
     facility = record.get("facility")
     if isinstance(facility, dict):
@@ -950,7 +1011,9 @@ def run_generate_application(
     paths = _prompt_paths(config)
     system_prompt = paths.system.read_text(encoding="utf-8")
     schema_text = paths.schema.read_text(encoding="utf-8")
-    facts_text = config.facts_path.read_text(encoding="utf-8")
+    facts_text = strip_watermark_from_facts_yaml(
+        config.facts_path.read_text(encoding="utf-8")
+    )
     user_template = _jinja_env(paths.user.parent).get_template(paths.user.name)
 
     rendered: list[RenderedApplication] = []
@@ -1038,7 +1101,6 @@ def _complete_one(
             product_family=product_family,
             product_label=product_label,
             attached_documents=attached_documents,
-            watermark=WATERMARK,
             schema=schema_text,
             facts_yaml=facts_text,
             facility_hint=FACILITY_PROMPT_HINTS[product_family],

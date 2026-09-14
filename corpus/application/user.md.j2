@@ -7,9 +7,8 @@ Required values (use exactly):
 - attached_documents:
 {% for title in attached_documents %}  - {{ title }}
 {% endfor %}
-- watermark context: {{ watermark }}
 
-Operator constraint (do NOT copy into JSON): intended slot {{ application_type }}; product family {{ product_family }}. Never write those labels, ApplicationType, or a judgement into any field.
+Operator constraint (do NOT copy into JSON): intended slot {{ application_type }}; product family {{ product_family }}. Never write those labels, ApplicationType, or a judgement into any field. Do not put a disclaimer or watermark in any JSON field, including narrative.
 
 Already-used identities (do not reuse):
 {% for item in used_identities -%}

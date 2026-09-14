@@ -154,6 +154,11 @@ FACILITY_PROMPT_HINTS = {
 }
 
 WATERMARK = "SYNTHETIC — DEMO ONLY"
+APPLICATION_DISCLAIMER_PHRASES = (
+    WATERMARK,
+    "synthetic credit application",
+    "This is not a real borrower record",
+)
 
 CORPUS_IDS = (
     "CP-RML-2026-01",

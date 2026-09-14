@@ -16,13 +16,17 @@ from talos.application import (
     attached_documents_for,
     contains_forbidden_outcome_token,
     credit_application_heading,
+    disclaimer_phrase_in,
     parse_application_markdown,
     parse_llm_json,
     run_generate_application,
+    strip_watermark_from_facts_yaml,
+    validate_filing_markdown,
     validate_record,
 )
 from talos.cli import cli
 from talos.constants import (
+    APPLICATION_DISCLAIMER_PHRASES,
     APPLICATION_ID_RE,
     APPLICATION_TYPES,
     FORBIDDEN_OUTCOME_TOKENS,
@@ -219,7 +223,10 @@ def test_generate_one_slot_writes_opaque_customer_filing(tmp_path: Path) -> None
     assert first_visible_line(text) == credit_application_heading(application_id)
     assert not text.lstrip().startswith(WATERMARK)
     assert not text.lstrip().startswith("---")
+    assert disclaimer_phrase_in(text) is None
+    assert "## Applicant statement" in text
     parsed = parse_application_markdown(text)
+    assert parsed["narrative"] in text.split("## Applicant statement", 1)[1]
     assert parsed["application_id"] == application_id
     assert parsed["customer_id"] == "SYN-111111"
     assert parsed["email"].endswith("@example.invalid")
@@ -527,6 +534,12 @@ def test_fixtures_parse_and_cover_each_type() -> None:
         )
         assert not text.lstrip().startswith(WATERMARK)
         assert not text.lstrip().startswith("---")
+        assert disclaimer_phrase_in(text) is None
+        assert "## Applicant statement" in text
+        heading_end = text.find("\n")
+        first_h2 = text.find("\n## ")
+        between = text[heading_end:first_h2].strip()
+        assert between == ""
         assert filename == f"credit-application-{record['application_id']}.md"
         assert re.fullmatch(APPLICATION_ID_RE, str(record["application_id"]))
         assert not contains_forbidden_outcome_token(str(record["application_id"]))
@@ -659,7 +672,8 @@ def test_generated_markdown_opens_with_heading_not_watermark(tmp_path: Path) -> 
     heading = credit_application_heading(rendered[0].record["application_id"])
     assert first_visible_line(text) == heading
     assert text.startswith(heading)
-    assert WATERMARK not in text.splitlines()[0]
+    assert WATERMARK not in text
+    assert disclaimer_phrase_in(text) is None
 
 
 def test_generated_markdown_has_no_yaml_frontmatter(tmp_path: Path) -> None:
@@ -689,6 +703,97 @@ def test_parse_rejects_watermark_prefix() -> None:
         parse_application_markdown(
             f"{WATERMARK}\n\n# Credit application {SAMPLE_SERIAL}\n"
         )
+
+
+def test_parse_rejects_watermark_anywhere() -> None:
+    with pytest.raises(TalosError, match="must not contain"):
+        parse_application_markdown(
+            f"# Credit application {SAMPLE_SERIAL}\n\n"
+            "## Identity\n\n- Name: Pat\n\n"
+            f"## Applicant statement\n\n{WATERMARK} I apply.\n"
+        )
+
+
+@pytest.mark.parametrize("phrase", APPLICATION_DISCLAIMER_PHRASES)
+def test_validate_record_rejects_disclaimer_phrases(phrase: str) -> None:
+    record = _valid_record("accepted", narrative=f"Please review this file. {phrase}")
+    errors = validate_record(
+        record,
+        application_type="accepted",
+        used=set(),
+        required_id=record["application_id"],
+        product_family="residential_mortgage",
+    )
+    assert any("must not contain" in err for err in errors), errors
+
+
+def test_validate_filing_markdown_rejects_preamble() -> None:
+    record = _valid_record("accepted")
+    heading = credit_application_heading(str(record["application_id"]))
+    markdown = (
+        f"{heading}\n\n"
+        "I am filing this synthetic credit application with Contoso Demo Bank. "
+        "This is not a real borrower record.\n\n"
+        "## Identity\n\n- Name: Pat Rivet\n\n"
+        "## Product\n\nowner-occupied residential mortgage\n\n"
+        "## Amount and financials\n\n- loan_amount: USD 320,000\n\n"
+        "## Attached documents\n\n- last 2 pay stubs\n- W-2\n- residential appraisal\n\n"
+        f"## Applicant statement\n\n{record['narrative']}\n"
+    )
+    errors = validate_filing_markdown(markdown, record)
+    assert any("preamble" in err for err in errors)
+    assert any("must not contain" in err for err in errors)
+
+
+def test_generated_markdown_has_no_preamble_and_statement_holds_narrative(
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "apps"
+    rendered = run_generate_application(
+        _config(out),
+        completer=ScriptedCompleter([_valid_record("accepted")]),
+        echo=lambda _: None,
+        clock=_frozen_clock,
+    )
+    text = (out / rendered[0].filename).read_text(encoding="utf-8")
+    heading_end = text.find("\n")
+    first_h2 = text.find("\n## ")
+    assert text[heading_end:first_h2].strip() == ""
+    assert "## Identity" in text
+    assert text.index("## Applicant statement") > text.index("## Identity")
+    narrative = str(rendered[0].record["narrative"])
+    statement = text.split("## Applicant statement", 1)[1].strip()
+    assert statement == narrative
+    assert disclaimer_phrase_in(text) is None
+
+
+def test_generate_prompts_do_not_inject_disclaimer_phrases(tmp_path: Path) -> None:
+    system = (repo_root() / "corpus/application/system.md").read_text(encoding="utf-8")
+    user_src = (repo_root() / "corpus/application/user.md.j2").read_text(
+        encoding="utf-8"
+    )
+    template = (repo_root() / "corpus/application/document.md.j2").read_text(
+        encoding="utf-8"
+    )
+    for phrase in APPLICATION_DISCLAIMER_PHRASES:
+        assert phrase not in system
+        assert phrase not in user_src
+        assert phrase not in template
+    assert "{{ watermark }}" not in user_src
+    facts = FACTS.read_text(encoding="utf-8")
+    assert WATERMARK in facts
+    assert WATERMARK not in strip_watermark_from_facts_yaml(facts)
+    completer = ScriptedCompleter([_valid_record("accepted")])
+    run_generate_application(
+        _config(tmp_path / "apps"),
+        completer=completer,
+        echo=lambda _: None,
+        clock=_frozen_clock,
+    )
+    blob = json.dumps(completer.calls, ensure_ascii=False)
+    for phrase in APPLICATION_DISCLAIMER_PHRASES:
+        assert phrase not in blob
+    assert WATERMARK not in blob
 
 
 def test_force_without_application_id_is_usage_error() -> None:

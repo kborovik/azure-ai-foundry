@@ -10,4 +10,4 @@ Rules:
 - Do not mention whether the file is complete or whether figures meet policy.
 - Copy numeric figures from facts.yaml literals when you mention a limit as a requested amount or ratio. Do not round those literals.
 - attached_documents is a list of titles only. Do not invent file contents or extra files.
-- The application is SYNTHETIC — DEMO ONLY. It is not a production credit decision.
+- Do not add a disclaimer or watermark to any JSON field, including narrative.
