@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.4.0] - 2026-09-15
+
 ### Fixed
 
 - **Deploy pin after Teams:** `talos deploy` always merge-patches `agent_endpoint.version_selector` onto the new version, even when Activity is already enabled. `--skip-endpoint-patch` still skips the pin.
