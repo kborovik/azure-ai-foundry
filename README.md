@@ -100,24 +100,24 @@ flowchart TB
   Project --> Agent[Credit Policy Agent]
 ```
 
-## From repository to Teams
+## Deploying the demo
 
-Getting from this repository to a working Teams chat is four steps. An engineer runs them; the picture is the process.
+Four steps take this repository to a working Teams chat. Terraform in `infra/` stands up Azure; the `talos` CLI loads `data/`, creates the agent from `agents/`, and publishes it to Teams.
 
 ```mermaid
 flowchart TB
-  S1[1. Create Azure Resources] --> S2[2. Load Documents]
-  S2 --> S3[3. Activate Agent]
-  S3 --> S4[4. Publish Agent in Teams]
+  S1[1. infra/<br/>Azure resources] --> S2[2. data/<br/>knowledge base]
+  S2 --> S3[3. agents/<br/>prompt agent]
+  S3 --> S4[4. Teams<br/>1:1 chat]
 ```
 
-1. **Create Azure Resources.** A development environment and a production-shaped environment. Each one gets document storage, enterprise search, a Foundry project, and the models the agent uses. Both environments are the same shape so a demo in the lab matches what production would look like.
+1. **Azure resources (`infra/`).** Terraform creates document storage, enterprise search, a Foundry project, and the models. Two environments (`dev1`, `prd1`) share that shape so a lab demo matches production.
 
-2. **Load Documents.** The twelve credit policies in this repository, and sample applications generated for the demo, are stored and indexed into the knowledge base. Until this step finishes, the agent has nothing grounded to quote.
+2. **Knowledge base (`data/`).** The twelve credit policies (rendered from `corpus/` into `data/credit-policies/`) and the sample applications in `data/client-applications/` are stored and indexed. Until this step finishes, the agent has nothing grounded to quote.
 
-3. **Activate Agent.** The prompt agent is created in Foundry with a single instruction: answer only from the knowledge base, and cite the source. It cannot invent LTV, DTI, or committee names, and it will not override published policy.
+3. **Prompt agent (`agents/`).** Foundry creates the agent from the instructions in `agents/`: answer only from the knowledge base, and cite the source. It cannot invent LTV, DTI, or committee names, and it will not override published policy.
 
-4. **Publish Agent in Teams.** Publish as a private 1:1 chat for the operator. If the tenant blocks that path, sideload the Teams app instead. A credit officer then asks a policy question, or names an application to evaluate. See [docs/teams.md](docs/teams.md).
+4. **Teams.** Publish as a private 1:1 chat for the operator. If the tenant blocks that path, sideload the Teams app instead. A credit officer then asks a policy question, or names an application to evaluate. See [docs/teams.md](docs/teams.md).
 
 A production release repeats steps 2–4 against the live environment: refresh documents, re-index, keep the agent pointed at the published policies. Every code change is tested automatically; secrets are not stored in git.
 
