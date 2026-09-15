@@ -104,7 +104,7 @@ T25|x|swap application generate+fixtures: MD opens `# Credit application {applic
 T26|x|swap application serials: unique `CA-{YYYYMMDD}-{unix_ms}` SerialAllocator bump-ms; `--count N` (`--type` N files, `--all` 3N); `--force --application-id` keep serial; `--force` w/o id or w/ `--count` usage error; two generates ! share id unless force-named; manifest keyed by `application_id` lockstep filename ! colon; wait-gate application processed ≥ local corpus size; unit fixtures+instructions new-format ids|V5,V24,V31,V32,I.cmd,I.file,I.agent
 T28|x|swap application template+prompts+fixtures: drop disclaimer after H1; `## Applicant statement` holds narrative; application MD ! `SYNTHETIC — DEMO ONLY` ! `synthetic credit application` ! `This is not a real borrower record`; generate prompts ! inject watermark into narrative; validate reject if present|V2,V32,I.file
 T29|x|add `talos chat` Responses playground CLI one-shot/stdin/TTY REPL + stderr wait indicator; unit tests; demo.md backup swap|V4,V10,I.cmd
-T30|.|sync EvaluationMode + `assert_policy_only_citations` → allow application retrieve glyphs paired w/ a policy cite; fail application-only threshold glyphs; drop "never cite an application blob"|V3,V27,I.agent,I.pytest
+T30|x|sync EvaluationMode + `assert_policy_only_citations` → allow application retrieve glyphs paired w/ a policy cite; fail application-only threshold glyphs; drop "never cite an application blob"|V3,V27,I.agent,I.pytest
 
 ## §B BUGS
 

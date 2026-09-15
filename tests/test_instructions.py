@@ -21,9 +21,11 @@ def test_instructions_contain_evaluation_mode() -> None:
     assert "ks-client-applications" in text
     assert "ks-credit-policies" in text
     assert "【message_idx:search_idx†source_name】" in text
-    assert "never cite an application blob" in text.lower() or (
-        "never cite" in text.lower() and "application blob" in text.lower()
-    )
+    assert "never cite an application blob" not in text.lower()
+    assert "credit-application-{application_id}.md" in text
+    assert "sole source" in text.lower()
+    assert "application facts" in text.lower()
+    assert "policy thresholds" in text.lower()
     assert (
         REFUSAL_SENTENCE in text.lower()
         or "That is not in the published policies." in text

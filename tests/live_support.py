@@ -247,10 +247,22 @@ def citation_sources(text: str) -> list[str]:
 _LEGACY_APPLICATION_BLOBS = frozenset({"accepted.md", "rejected.md", "missing-data.md"})
 
 
+def _citation_basename(source: str) -> str:
+    return source.rstrip("/").rsplit("/", 1)[-1]
+
+
 def assert_policy_only_citations(text: str) -> None:
+    saw_policy = False
+    saw_application = False
     for source in citation_sources(text):
-        basename = source.rstrip("/").rsplit("/", 1)[-1]
-        assert not basename.startswith("credit-application-"), source
+        basename = _citation_basename(source)
         assert basename not in _LEGACY_APPLICATION_BLOBS, source
+        if basename.startswith("credit-application-"):
+            saw_application = True
+            continue
         if basename.endswith(".md"):
             assert basename.startswith("CP-"), source
+        saw_policy = True
+    assert not saw_application or saw_policy, (
+        "application retrieve glyphs require a paired policy cite: " + text
+    )
