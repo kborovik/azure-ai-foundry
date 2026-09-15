@@ -69,8 +69,7 @@ def test_policy_only_citations_allow_paired_application_glyphs() -> None:
         "CP-RML-2026-01-residential-mortgage.md】"
     )
     assert_policy_only_citations(
-        "ok 【0:1†CP-DOC-2026-01.md】 "
-        "【0:2†credit-application-CA-2026-000202.md】"
+        "ok 【0:1†CP-DOC-2026-01.md】 【0:2†credit-application-CA-2026-000202.md】"
     )
     assert_policy_only_citations(
         "ok 【0:1†CP-RML-2026-01-residential-mortgage.md】 "
