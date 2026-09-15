@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [v0.3.0] - 2026-09-15
+
 ### Added
 
 - **`talos chat`:** terminal Foundry playground. `uv run talos chat [QUESTION…]` POSTs the prompt agent via the Responses API (`agent_reference`). One-shot args or stdin; TTY with no args is a REPL (`/quit`). stderr shows `Waiting for agent…` while the reply is in flight (TTY only). Missing project endpoint exits 2.

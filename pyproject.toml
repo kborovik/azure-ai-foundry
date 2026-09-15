@@ -1,6 +1,6 @@
 [project]
 name = "talos"
-version = "0.2.1"
+version = "0.3.0"
 description = "CLI to deploy and test the Contoso Demo Bank credit-policy agent on Microsoft Foundry."
 readme = "README.md"
 requires-python = ">=3.14"
