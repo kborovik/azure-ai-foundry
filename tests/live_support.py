@@ -191,7 +191,33 @@ def expected_decision_token(expected_judgement: str) -> str:
         return "accept"
     if expected_judgement == "rejected":
         return "reject"
-    return "missing"
+    return "missing-data"
+
+
+# First Judgement `decision` field. Longer tokens first so "accepted" wins over "accept".
+_LEAD_DECISION = re.compile(
+    r"\bdecision\b(?:\s*\*\*)?[\s:*–=-]+"
+    r"(accepted|rejected|missing-data|accept|reject|missing)",
+    re.IGNORECASE,
+)
+
+
+def lead_decision_token(text: str) -> str:
+    match = _LEAD_DECISION.search(text)
+    if match is None:
+        return ""
+    raw = match.group(1).lower()
+    if raw.startswith("accept"):
+        return "accept"
+    if raw.startswith("reject"):
+        return "reject"
+    return "missing-data"
+
+
+def assert_expected_decision(text: str, expected_judgement: str) -> None:
+    expected = expected_decision_token(expected_judgement)
+    lead = lead_decision_token(text)
+    assert lead == expected, f"lead decision {lead!r} != {expected!r}"
 
 
 def knowledge_source_status(

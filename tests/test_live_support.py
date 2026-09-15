@@ -4,6 +4,9 @@ import pytest
 
 from tests.live_support import (
     application_cases,
+    assert_expected_decision,
+    expected_decision_token,
+    lead_decision_token,
     pick_application_case,
     print_agent_turn,
 )
@@ -46,3 +49,30 @@ def test_pick_application_case_is_seeded(monkeypatch: pytest.MonkeyPatch) -> Non
     second = pick_application_case("accepted")
     assert first["application_id"] == second["application_id"]
     assert first["application_type"] == "accepted"
+
+
+def test_expected_decision_token_maps_slots() -> None:
+    assert expected_decision_token("accepted") == "accept"
+    assert expected_decision_token("rejected") == "reject"
+    assert expected_decision_token("missing-data") == "missing-data"
+
+
+def test_lead_decision_token_reads_first_decision_field() -> None:
+    assert lead_decision_token("decision: accept. LTV clears.") == "accept"
+    assert lead_decision_token("1) decision: rejected — LTV 72%.") == "reject"
+    assert lead_decision_token("**Decision:** missing-data") == "missing-data"
+    assert lead_decision_token("I judge this application as accepted.") == ""
+
+
+def test_missing_data_lead_does_not_satisfy_rejected() -> None:
+    text = (
+        "1) decision: missing-data – the file is incomplete (a required ESG "
+        "report is not listed) and therefore cannot be accepted. The LTV 72% "
+        "would be rejected against CP-CRE-2026-01 if the file were complete."
+    )
+    assert lead_decision_token(text) == "missing-data"
+    assert expected_decision_token("rejected") == "reject"
+    with pytest.raises(AssertionError, match="lead decision"):
+        assert_expected_decision(text, "rejected")
+    assert_expected_decision(text, "missing-data")
+    assert_expected_decision("Judgement decision: reject. LTV 72%.", "rejected")
