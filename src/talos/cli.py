@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import click
@@ -31,6 +32,7 @@ from talos.constants import (
     DEFAULT_PUBLISH_DISPLAY_NAME,
     DEFAULT_TEMPLATES_RELATIVE,
 )
+from talos.chat import ChatConfig, run_chat
 from talos.env import repo_root, require_env, resolve_env
 from talos.errors import TalosError
 from talos.generate import GenerateConfig, run_generate
@@ -68,7 +70,7 @@ def _emit_completion(
 )
 @click.version_option(version=__version__, prog_name="talos")
 def cli() -> None:
-    """Generate, deploy, and publish the credit-policy agent on Microsoft Foundry."""
+    """Generate, deploy, publish, and chat with the credit-policy agent on Microsoft Foundry."""
 
 
 @cli.group(invoke_without_command=True)
@@ -594,6 +596,70 @@ def publish(
                 exit_code=2,
             )
         run_publish(config, echo=click.echo)
+    except TalosError as exc:
+        click.echo(str(exc), err=True)
+        raise SystemExit(exc.exit_code) from exc
+
+
+@cli.command()
+@click.argument("question", nargs=-1)
+@click.option(
+    "--project-endpoint",
+    default=None,
+    help="Foundry project endpoint. Default $AZURE_AI_PROJECT_ENDPOINT.",
+)
+@click.option("--agent-name", default=DEFAULT_AGENT_NAME, show_default=True)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Print the chat plan without calling Azure.",
+)
+@click.option(
+    "--no-terraform",
+    is_flag=True,
+    help="Do not fill missing env vars from `infra/outputs.json`.",
+)
+def chat(
+    question: tuple[str, ...],
+    project_endpoint: str | None,
+    agent_name: str,
+    dry_run: bool,
+    no_terraform: bool,
+) -> None:
+    """Send a question to the Foundry playground agent and print the answer."""
+    try:
+        env = resolve_env(use_terraform=not no_terraform)
+        endpoint = _first(project_endpoint, env.get("AZURE_AI_PROJECT_ENDPOINT"))
+        if not endpoint:
+            raise TalosError(
+                "Azure environment is not configured "
+                "(missing AZURE_AI_PROJECT_ENDPOINT). "
+                "Set the variable, pass --project-endpoint, or run "
+                "`gmake infra-create` (writes `infra/outputs.json`).",
+                exit_code=2,
+            )
+        joined = " ".join(question).strip()
+        interactive = False
+        if not joined and not sys.stdin.isatty():
+            joined = sys.stdin.read().strip()
+        if not joined:
+            if dry_run:
+                pass
+            elif sys.stdin.isatty():
+                interactive = True
+            else:
+                raise TalosError("question is required", exit_code=1)
+        config = ChatConfig(
+            project_endpoint=endpoint,
+            agent_name=agent_name,
+            dry_run=dry_run,
+        )
+        run_chat(
+            config,
+            question=joined or None,
+            interactive=interactive,
+            echo=click.echo,
+        )
     except TalosError as exc:
         click.echo(str(exc), err=True)
         raise SystemExit(exc.exit_code) from exc

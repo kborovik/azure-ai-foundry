@@ -1,4 +1,4 @@
-"""Talos — generate, deploy, and test the credit-policy agent on Microsoft Foundry."""
+"""Talos — generate, deploy, publish, and chat with the credit-policy agent on Microsoft Foundry."""
 
 from importlib.metadata import version as pkg_version
 

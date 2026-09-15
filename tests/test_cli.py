@@ -27,12 +27,13 @@ STORAGE_ID = (
 AI_SERVICES = "https://aif-cp-demo.services.ai.azure.com"
 
 
-def test_root_help_lists_generate_deploy_and_publish() -> None:
+def test_root_help_lists_generate_deploy_publish_and_chat() -> None:
     result = CliRunner().invoke(cli, ["--help"])
     assert result.exit_code == 0
     assert "generate" in result.output
     assert "deploy" in result.output
     assert "publish" in result.output
+    assert "chat" in result.output
     assert "--completion" in result.output
     missing = CliRunner().invoke(cli, ["test"])
     assert missing.exit_code != 0
@@ -60,6 +61,7 @@ def test_no_terraform_help_mentions_outputs_json() -> None:
         ("generate", "application"),
         ("deploy",),
         ("publish",),
+        ("chat",),
     ):
         result = CliRunner().invoke(cli, [*cmd, "--help"])
         assert result.exit_code == 0

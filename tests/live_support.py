@@ -12,9 +12,7 @@ import pytest
 
 from talos.application import parse_application_markdown
 from talos.constants import (
-    DEFAULT_AGENT_NAME,
     DEFAULT_KNOWLEDGE_BASE,
-    FOUNDRY_SCOPE,
     SEARCH_API_VERSION,
     SEARCH_SCOPE,
 )
@@ -86,52 +84,34 @@ def retrieve(rest: RestClient, env: dict[str, str], query: str) -> dict[str, Any
 def invoke_agent(env: dict[str, str], user_text: str) -> str:
     from azure.identity import DefaultAzureCredential
 
+    from talos.chat import ChatConfig, ask
+    from talos.errors import TalosError
     from talos.rest import RequestsRest
 
     rest = RequestsRest(DefaultAzureCredential())
-    url = f"{env['AZURE_AI_PROJECT_ENDPOINT'].rstrip('/')}/openai/v1/responses"
-    response = post_or_skip(
-        rest,
-        url,
-        scope=FOUNDRY_SCOPE,
-        json_body={
-            "input": user_text,
-            "agent_reference": {
-                "name": DEFAULT_AGENT_NAME,
-                "type": "agent_reference",
-            },
-        },
-        action="agent responses",
-        timeout=180.0,
-    )
-    payload = response.json if isinstance(response.json, dict) else {}
-    text = _response_output_text(payload)
-    print_agent_turn(user_text, text)
-    if not text.strip():
-        pytest.skip("agent responses returned empty text")
-    return text
+    config = ChatConfig(project_endpoint=env["AZURE_AI_PROJECT_ENDPOINT"])
+    try:
+        turn = ask(rest, config, user_text)
+    except TalosError as exc:
+        detail = str(exc)
+        if any(
+            token in detail
+            for token in (
+                "failed (401)",
+                "failed (403)",
+                "failed (404)",
+                "empty text",
+            )
+        ):
+            pytest.skip(detail)
+        raise
+    print_agent_turn(user_text, turn.text)
+    return turn.text
 
 
 def print_agent_turn(request: str, response: str) -> None:
     sys.stdout.write(f"\nAgent Request\n{request}\n\nAgent Response\n{response}\n")
     sys.stdout.flush()
-
-
-def _response_output_text(payload: dict[str, Any]) -> str:
-    direct = payload.get("output_text")
-    if isinstance(direct, str) and direct.strip():
-        return direct
-    chunks: list[str] = []
-    for item in payload.get("output") or []:
-        if not isinstance(item, dict):
-            continue
-        for content in item.get("content") or []:
-            if not isinstance(content, dict):
-                continue
-            text = content.get("text")
-            if isinstance(text, str):
-                chunks.append(text)
-    return "\n".join(chunks)
 
 
 def _cases_from_dir(base: Path) -> list[dict[str, Any]]:

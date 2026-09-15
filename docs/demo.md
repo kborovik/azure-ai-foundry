@@ -1,10 +1,18 @@
 # Playground demo script
 
-Use the Foundry playground when Microsoft Teams is silent. Same agent, same knowledge base, same citations. Do not build a custom chat for this.
+Use the Foundry playground when Microsoft Teams is silent. Same agent, same knowledge base, same citations.
+
+Terminal playground (same Responses API as the portal):
+
+```bash
+uv run talos chat What is the maximum LTV for an owner-occupied residential mortgage?
+```
+
+No args opens a REPL (`/quit` to leave). stderr shows `Waiting for agent…` until the reply lands. stdout is the answer, including citation glyphs.
 
 Microsoft 365 Copilot and Bot Service Web Chat share the Teams Bot Service path. Skip them.
 
-## Open the playground
+## Open the portal playground
 
 1. [https://ai.azure.com](https://ai.azure.com)
 2. Project **credit-policy-demo** (account `credit-policy-lab5`, RG `credit-policy-dev1`).
@@ -90,10 +98,14 @@ If Teams comes up: one sentence — officer experience is 1:1 chat; Foundry Team
 ## Backup if the portal is slow
 
 ```bash
-uv run pytest -m agent --override-ini addopts= -k "evaluate" -v -s
+uv run talos chat
 ```
 
-Same live agent. Use only if the playground fails; not the hiring-manager view.
+Same live agent as the portal playground. Use the REPL and paste the script questions. pytest is not the hiring-manager view:
+
+```bash
+uv run pytest -m agent --override-ini addopts= -k "evaluate" -v -s
+```
 
 ## Related
 

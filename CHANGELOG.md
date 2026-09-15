@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **`talos chat`:** terminal Foundry playground. `uv run talos chat [QUESTION…]` POSTs the prompt agent via the Responses API (`agent_reference`). One-shot args or stdin; TTY with no args is a REPL (`/quit`). stderr shows `Waiting for agent…` while the reply is in flight (TTY only). Missing project endpoint exits 2.
+
 ### Changed
 
 - **No synthetic watermark:** policy Markdown, `facts.yaml`, and both manifests no longer carry `SYNTHETIC — DEMO ONLY` or "Not a real bank policy". The agent treats retrieved documents as published Contoso Demo Bank policy.
