@@ -98,7 +98,7 @@ def test_chat_one_shot_prints_answer(
         json_response(200, _ok_body("80% owner-occupied")),
     )
     monkeypatch.setenv("AZURE_AI_PROJECT_ENDPOINT", PROJECT)
-    monkeypatch.setattr("talos.rest.RequestsRest", lambda credential: rest)
+    monkeypatch.setattr("talos.chat.RequestsRest", lambda credential: rest)
     monkeypatch.setattr("azure.identity.DefaultAzureCredential", lambda: object())
     result = CliRunner().invoke(
         cli,
@@ -213,6 +213,32 @@ def test_run_chat_repl_threads_previous_response_id() -> None:
     assert "previous_response_id" not in rest.calls[0].json_body
     assert rest.calls[1].json_body["previous_response_id"] == "resp_a"
     assert wait.events == ["start", "stop", "start", "stop"]
+
+
+def test_repl_keyboard_interrupt_during_ask_returns_to_prompt() -> None:
+    class InterruptRest:
+        def request(self, *args: object, **kwargs: object) -> object:
+            raise KeyboardInterrupt
+
+    lines = iter(["hello", "/quit"])
+
+    def prompt(_label: str) -> str:
+        return next(lines)
+
+    echo = Echo()
+    wait = RecordingWait()
+    run_chat(
+        _config(),
+        question=None,
+        interactive=True,
+        rest=InterruptRest(),  # type: ignore[arg-type]
+        wait=wait,
+        prompt=prompt,
+        echo=echo,
+    )
+    assert echo.out == []
+    assert echo.err == [""]
+    assert wait.events == ["start", "stop"]
 
 
 def test_wait_indicator_starts_and_stops_on_empty_answer() -> None:

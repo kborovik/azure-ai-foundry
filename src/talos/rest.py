@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
-import requests
 from azure.core.credentials import TokenCredential
 
 from talos.errors import TalosError
+
+if TYPE_CHECKING:
+    import requests
 
 
 @dataclass(frozen=True)
@@ -41,8 +43,10 @@ class RequestsRest:
         credential: TokenCredential,
         session: requests.Session | None = None,
     ) -> None:
+        import requests as requests_lib
+
         self._credential = credential
-        self._session = session or requests.Session()
+        self._session = session or requests_lib.Session()
 
     def request(
         self,
@@ -54,6 +58,8 @@ class RequestsRest:
         content_type: str = "application/json",
         timeout: float = 60.0,
     ) -> RestResponse:
+        import requests
+
         token = self._credential.get_token(scope)
         headers = {
             "Authorization": f"Bearer {token.token}",
@@ -65,7 +71,10 @@ class RequestsRest:
                 kwargs["json"] = json_body
             else:
                 kwargs["data"] = json.dumps(json_body)
-        response = self._session.request(method, url, **kwargs)
+        try:
+            response = self._session.request(method, url, **kwargs)
+        except requests.RequestException as exc:
+            raise TalosError(f"{method} {url} failed: {exc}", exit_code=1) from exc
         body: Any = None
         if response.content:
             try:

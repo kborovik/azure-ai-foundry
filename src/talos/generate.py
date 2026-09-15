@@ -234,10 +234,8 @@ def sync_markdown_directory(
     *,
     force: bool,
     echo: Echo,
-    extra_metadata: dict[str, str] | None = None,
 ) -> int:
     """Upload `*.md` from directory. Skip when blob metadata content_sha256 matches."""
-    extra = extra_metadata or {}
     uploaded = 0
     try:
         store.ensure_container()
@@ -247,7 +245,6 @@ def sync_markdown_directory(
         paths = sorted(directory.glob("*.md"))
         if not paths:
             echo(f"blob-sync: no markdown in {directory}")
-            return 0
         for path in paths:
             data = path.read_bytes()
             digest = hashlib.sha256(data).hexdigest()
@@ -255,7 +252,7 @@ def sync_markdown_directory(
             if existing is not None and existing.lower() == digest:
                 echo(f"{path.name}  blob={store.blob_url(path.name)}  skipped")
                 continue
-            metadata = {"content_sha256": digest, **extra}
+            metadata = {"content_sha256": digest}
             url = store.upload_markdown(path.name, data, metadata)
             echo(f"{path.name}  blob={url}  uploaded")
             uploaded += 1

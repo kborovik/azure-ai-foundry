@@ -23,7 +23,7 @@ Portal or REST. Both set `publishScope=Shared` (Just you) and `BotServiceRbac`. 
 1. Open the Foundry project `credit-policy-demo`.
 2. Open agent `credit-policy-agent`.
 3. Publish to Microsoft Teams → **Just you** (BotServiceRbac).
-4. After publish, do **not** replace `protocol_configuration` or `authorization_schemes`. Later `talos deploy` skips the endpoint merge-patch when Activity is already enabled (`--skip-endpoint-patch` is implied).
+4. After publish, do **not** replace `protocol_configuration` or `authorization_schemes`. Later `talos deploy` still pins `version_selector` to the new agent version (merge-patch of that field only). `--skip-endpoint-patch` skips the pin.
 
 ### REST (`talos publish`)
 

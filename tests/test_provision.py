@@ -615,7 +615,7 @@ def test_wait_polls_while_current_synchronization_in_progress(tmp_path: Path) ->
     )
 
 
-def test_skip_endpoint_patch_when_activity_enabled(tmp_path: Path) -> None:
+def test_pins_version_when_activity_enabled(tmp_path: Path) -> None:
     rest = _script_happy_path(FakeRest())
     agents = FakeAgents(
         agent={"agent_endpoint": {"protocol_configuration": {"activity": {}}}}
@@ -627,7 +627,7 @@ def test_skip_endpoint_patch_when_activity_enabled(tmp_path: Path) -> None:
         clock=FakeClock(),
         echo=lambda _: None,
     )
-    assert agents.pinned is None
+    assert agents.pinned == ("credit-policy-agent", "3")
 
 
 def test_skip_endpoint_patch_flag(tmp_path: Path) -> None:
@@ -817,6 +817,14 @@ def test_wait_fails_when_application_processed_below_local_corpus_size(
             clock=FakeClock(),
             echo=lambda _: None,
         )
+
+
+def test_wait_fails_when_application_dir_empty(tmp_path: Path) -> None:
+    config = _config(tmp_path, wait=True)
+    for path in Path(config.application_dir).glob("*.md"):
+        path.unlink()
+    with pytest.raises(TalosError, match="--wait needs at least 3"):
+        do_deploy(config, rest=FakeRest())
 
 
 def test_deploy_blob_syncs_both_corpora_and_hash_skips(tmp_path: Path) -> None:

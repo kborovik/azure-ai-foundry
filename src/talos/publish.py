@@ -31,7 +31,7 @@ from talos.constants import (
 )
 from talos.errors import TalosError
 from talos.provision import activity_protocol_enabled
-from talos.rest import RestClient, RestResponse, raise_for_status
+from talos.rest import RequestsRest, RestClient, RestResponse, raise_for_status
 
 Echo = Callable[[str], None]
 DEVELOPER_NAME_MAX = 32
@@ -95,7 +95,7 @@ def tenant_from_jwt(token: str) -> str:
         payload = token.split(".")[1]
         padded = payload + "=" * (-len(payload) % 4)
         data = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")))
-    except IndexError, ValueError, json.JSONDecodeError:
+    except IndexError, ValueError:
         return ""
     if not isinstance(data, dict):
         return ""
@@ -299,8 +299,6 @@ def run_publish(
 
 
 def _require_rest(credential: TokenCredential) -> RestClient:
-    from talos.rest import RequestsRest
-
     return RequestsRest(credential)
 
 

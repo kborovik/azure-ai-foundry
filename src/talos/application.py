@@ -22,7 +22,6 @@ from talos.constants import (
     APPLICATION_TYPES,
     CUSTOMER_ID_RE,
     DEFAULT_APPLICATION_CONTAINER,
-    DEFAULT_APPLICATION_OUTPUT_RELATIVE,
     DEFAULT_APPLICATION_SCHEMA_RELATIVE,
     DEFAULT_APPLICATION_SYSTEM_PROMPT_RELATIVE,
     DEFAULT_APPLICATION_TEMPLATE_RELATIVE,
@@ -48,7 +47,7 @@ from talos.env import (
 )
 from talos.errors import TalosError
 from talos.generate import BlobStore, first_visible_line, open_blob_store
-from talos.rest import RestClient, raise_for_status
+from talos.rest import RequestsRest, RestClient, raise_for_status
 
 Echo = Callable[[str], None]
 
@@ -186,16 +185,6 @@ def application_filename(application_id: str) -> str:
 def contains_forbidden_outcome_token(value: str) -> bool:
     upper = value.upper()
     return any(token in upper for token in FORBIDDEN_OUTCOME_TOKENS)
-
-
-def assign_product_family(slot: str, used_families: set[str]) -> str:
-    preferred = SLOT_PRODUCT_FAMILY[slot]
-    if preferred not in used_families:
-        return preferred
-    for family in PRODUCT_FAMILIES:
-        if family not in used_families:
-            return family
-    return preferred
 
 
 def attached_documents_for(
@@ -664,9 +653,6 @@ class SerialAllocator:
             return peeked
         return self._next_serial(consume=True)
 
-    def release(self, serial: str) -> None:
-        self._used.discard(serial)
-
     def _next_serial(self, *, consume: bool) -> str:
         now = self._clock()
         if now.tzinfo is None:
@@ -684,16 +670,6 @@ class SerialAllocator:
                     self._used.add(candidate)
                 return candidate
             ms += 1
-
-
-def allocate_application_id(
-    used: set[str],
-    *,
-    now: datetime | None = None,
-    clock: Callable[[], datetime] | None = None,
-) -> str:
-    frozen = (lambda: now) if now is not None else clock
-    return SerialAllocator(used=set(used), clock=frozen).mint()
 
 
 def allocate_customer_id(used: set[str]) -> str:
@@ -966,10 +942,7 @@ def write_applications(
     rendered: list[RenderedApplication],
     manifest: dict[str, Any],
     echo: Echo,
-    *,
-    stale_filenames: set[str] | None = None,
 ) -> None:
-    del stale_filenames
     out.mkdir(parents=True, exist_ok=True)
     for item in rendered:
         path = out / item.filename
@@ -1144,9 +1117,6 @@ def run_generate_application(
             template_path=paths.template,
         )
         application_id = forced_id or allocator.mint(peeked=candidate)
-        if application_id != candidate:
-            record["application_id"] = application_id
-            item = render_application(record, paths.template, application_type=kind)
         intended = kind
         if forced_id and not config.types:
             intended = str(
@@ -1323,11 +1293,5 @@ def _default_completer(
     *,
     credential: TokenCredential | None,
 ) -> FoundryChatCompleter:
-    from talos.rest import RequestsRest
-
     cred = credential or DefaultAzureCredential()
     return FoundryChatCompleter(RequestsRest(cred), project_endpoint, model)
-
-
-def default_application_out() -> Path:
-    return repo_root() / DEFAULT_APPLICATION_OUTPUT_RELATIVE

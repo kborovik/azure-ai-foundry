@@ -45,7 +45,14 @@ from talos.application import seed_application_fixtures
 from talos.env import repo_root
 from talos.errors import TalosError
 from talos.generate import BlobStore, open_blob_store, sync_markdown_directory
-from talos.rest import Clock, RestClient, RestResponse, SystemClock, raise_for_status
+from talos.rest import (
+    Clock,
+    RequestsRest,
+    RestClient,
+    RestResponse,
+    SystemClock,
+    raise_for_status,
+)
 
 
 Echo = Callable[[str], None]
@@ -291,7 +298,10 @@ def deploy_sources(
             container=config.application_container,
             description=KS_APPLICATION_DESCRIPTION,
             local_dir=application_dir,
-            min_indexed_items=local_corpus_size(application_dir),
+            min_indexed_items=max(
+                config.min_application_indexed_items,
+                local_corpus_size(application_dir),
+            ),
         ),
     )
 
@@ -463,14 +473,8 @@ def run_deploy(
     )
     echo(f"created agent '{config.agent_name}' version {version}")
 
-    agent = agent_ops.get_agent(config.agent_name)
-    if config.skip_endpoint_patch or activity_protocol_enabled(agent):
-        reason = (
-            "--skip-endpoint-patch"
-            if config.skip_endpoint_patch
-            else "Activity protocol already enabled"
-        )
-        echo(f"skipping agent endpoint patch ({reason})")
+    if config.skip_endpoint_patch:
+        echo("skipping agent endpoint patch (--skip-endpoint-patch)")
         return
 
     echo(f"pinning agent '{config.agent_name}' to version {version}")
@@ -478,8 +482,6 @@ def run_deploy(
 
 
 def _require_rest(credential: TokenCredential) -> RestClient:
-    from talos.rest import RequestsRest
-
     return RequestsRest(credential)
 
 

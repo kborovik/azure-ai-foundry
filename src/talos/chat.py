@@ -8,7 +8,7 @@ from typing import Any, Protocol, TextIO
 
 from talos.constants import DEFAULT_AGENT_NAME, FOUNDRY_SCOPE
 from talos.errors import TalosError
-from talos.rest import RestClient, raise_for_status
+from talos.rest import RequestsRest, RestClient, raise_for_status
 
 CHAT_TIMEOUT_SECONDS = 180.0
 WAIT_LABEL = "Waiting for agent…"
@@ -163,8 +163,6 @@ def run_chat(
     if rest is None:
         from azure.identity import DefaultAzureCredential
 
-        from talos.rest import RequestsRest
-
         rest = RequestsRest(DefaultAzureCredential())
     if wait is None:
         wait = TtyWaitIndicator(sys.stderr)
@@ -222,6 +220,9 @@ def _run_repl(
             return
         try:
             turn = _ask_waiting(rest, config, question, previous_id, wait)
+        except KeyboardInterrupt:
+            echo("", err=True)
+            continue
         except TalosError as exc:
             echo(str(exc), err=True)
             continue

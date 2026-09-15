@@ -356,6 +356,30 @@ def test_sync_markdown_directory_deletes_blobs_missing_locally(tmp_path: Path) -
     assert "accepted.md" in store.deletes
 
 
+def test_sync_empty_directory_deletes_remote_markdown(tmp_path: Path) -> None:
+    directory = tmp_path / "docs"
+    directory.mkdir()
+    store = FakeBlobStore()
+    store.blobs["stale.md"] = FakeBlob(data=b"legacy", metadata={})
+    uploaded = sync_markdown_directory(
+        store, directory, force=False, echo=lambda _: None
+    )
+    assert uploaded == 0
+    assert "stale.md" not in store.blobs
+    assert "stale.md" in store.deletes
+
+
+def test_sync_missing_directory_does_not_sweep(tmp_path: Path) -> None:
+    store = FakeBlobStore()
+    store.blobs["keep.md"] = FakeBlob(data=b"x", metadata={})
+    uploaded = sync_markdown_directory(
+        store, tmp_path / "missing", force=False, echo=lambda _: None
+    )
+    assert uploaded == 0
+    assert "keep.md" in store.blobs
+    assert store.deletes == []
+
+
 def test_azure_only_does_not_write_local(tmp_path: Path) -> None:
     out = tmp_path / "credit-policies"
     store = FakeBlobStore()

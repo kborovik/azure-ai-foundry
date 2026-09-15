@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Deploy pin after Teams:** `talos deploy` always merge-patches `agent_endpoint.version_selector` onto the new version, even when Activity is already enabled. `--skip-endpoint-patch` still skips the pin.
+- **RequestsRest:** wrap `requests.RequestException` as `TalosError` instead of a traceback.
+- **Blob-sync empty dir:** an empty local markdown directory still deletes remote `.md` blobs that are no longer present.
+- **`--wait` application floor:** application wait minimum is `max(3, local corpus size)` so an empty application dir fails the local pre-check.
+- **Chat REPL:** Ctrl+C while waiting for the agent returns to the prompt.
+
 ## [v0.3.0] - 2026-09-15
 
 ### Added

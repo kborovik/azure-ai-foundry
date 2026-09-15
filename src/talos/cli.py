@@ -353,7 +353,7 @@ def generate_application_cmd(
 @click.option(
     "--skip-endpoint-patch",
     is_flag=True,
-    help="Do not PATCH agent_endpoint (also skipped when Activity protocol is already enabled).",
+    help="Do not PATCH agent_endpoint.version_selector to pin the new version.",
 )
 @click.option(
     "--dry-run", is_flag=True, help="Print the deploy plan without calling Azure."
